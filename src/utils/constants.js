@@ -1,9 +1,15 @@
-import { HomeIcon, FilePlusIcon, FileTextIcon, ShoppingCartIcon, PieChartIcon, UsersIcon } from '../components/common/Icons';
+import { 
+  FaHome as HomeIcon,
+  FaPlusSquare as FilePlusIcon,  // FaFilePlus no existe, usar FaPlusSquare
+  FaFileAlt as FileTextIcon,     // FaFileText no existe, usar FaFileAlt
+  FaShoppingCart as ShoppingCartIcon,
+  FaChartPie as PieChartIcon,
+  FaUsers as UsersIcon
+} from 'react-icons/fa';
 
 export const navItems = [
   { name: 'Inicio', icon: HomeIcon, path: '/' },
-  { name: 'Crear Solicitud', icon: FilePlusIcon, path: '/solicitudes/crear' },
-  { name: 'Gestionar Solicitudes', icon: FileTextIcon, path: '/solicitudes' },
+  { name: 'Solicitudes', icon: FileTextIcon, path: '/solicitudes' },
   { name: 'Compras', icon: ShoppingCartIcon, path: '/compras' },
   { name: 'Reportes', icon: PieChartIcon, path: '/reportes' },
   { name: 'Usuarios', icon: UsersIcon, path: '/usuarios' },

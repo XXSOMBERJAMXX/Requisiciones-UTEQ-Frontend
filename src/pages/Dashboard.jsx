@@ -1,6 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FilePlusIcon, FileTextIcon, ShoppingCartIcon, PieChartIcon, UsersIcon } from '../../src/components/common/Icons';
+import { 
+  FaPlusSquare as FilePlusIcon,
+  FaFileAlt as FileTextIcon,
+  FaShoppingCart as ShoppingCartIcon,
+  FaChartPie as PieChartIcon,
+  FaUsers as UsersIcon
+} from 'react-icons/fa';
 
 const Dashboard = () => {
   return (
