@@ -1,35 +1,50 @@
 import React, { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import Navbar from './Navbar'; // Para la versión móvil
+import Navbar from './Navbar';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
   return (
-    <div className="flex min-h-screen bg-gray-900 font-inter text-white">
-      {/* Sidebar para pantallas grandes */}
-      <div className="hidden md:flex flex-col w-64 bg-gray-800 text-white p-4 shadow-xl rounded-r-2xl">
+    <div className="h-screen flex bg-slate-900 font-inter text-slate-100 overflow-hidden">
+      {/* Sidebar para pantallas grandes - FIJO */}
+      <div className="hidden lg:flex flex-col w-64 bg-slate-800 border-r border-slate-700 shadow-xl h-screen fixed left-0 top-0 z-30">
         <Sidebar location={location} />
       </div>
 
       {/* Contenido principal */}
-      <div className="flex-1 flex flex-col">
-        {/* Navbar para pantallas pequeñas */}
-        <Navbar onMenuClick={() => setSidebarOpen(true)} />
+      <div className="flex-1 flex flex-col h-screen lg:ml-64">
+        {/* Navbar para pantallas pequeñas y medianas */}
+        <div className="lg:hidden flex-shrink-0">
+          <Navbar onMenuClick={() => setSidebarOpen(true)} />
+        </div>
 
         {/* Sidebar móvil (overlay) */}
         {sidebarOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 z-40 md:hidden" onClick={() => setSidebarOpen(false)}></div>
+          <div 
+            className="fixed inset-0 bg-black/70 z-40 lg:hidden backdrop-blur-sm" 
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
         )}
-        <div className={`fixed inset-y-0 left-0 w-64 bg-gray-800 text-white p-4 shadow-lg z-50 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out md:hidden`}>
-          <Sidebar location={location} onClose={() => setSidebarOpen(false)} isMobile={true} />
+        
+        <div className={`fixed inset-y-0 left-0 w-72 bg-slate-800 border-r border-slate-700 shadow-2xl z-50 transform ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } transition-transform duration-300 ease-in-out lg:hidden h-screen`}>
+          <Sidebar 
+            location={location} 
+            onClose={() => setSidebarOpen(false)} 
+            isMobile={true} 
+          />
         </div>
 
-        {/* Contenido de la página renderizado por Outlet */}
-        <main className="flex-1 p-6 overflow-auto">
-          <Outlet />
+        {/* Contenido de la página renderizado por Outlet - CON SU PROPIO SCROLL */}
+        <main className="flex-1 overflow-auto bg-slate-900 p-4 sm:p-6 lg:p-8">
+          <div className="max-w-full mx-auto">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
