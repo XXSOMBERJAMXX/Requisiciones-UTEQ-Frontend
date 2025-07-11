@@ -1,112 +1,278 @@
 // ===== ARCHIVO: src/services/authService.js =====
-const API_BASE_URL = 'http://localhost:3000'
+import apiClient from './interceptors'
+import { 
+  setAuthData, 
+  clearAuthData, 
+  getToken, 
+  getStoredUser, 
+  isAuthenticated,
+  getUserRole,
+  hasRole,
+  hasPermission
+} from './interceptors'
 
+// ===== CLASE AUTHSERVICE =====
 class AuthService {
-  // Login
+  /**
+   * Iniciar sesión
+   * @param {string} correo_institucional - Correo institucional
+   * @param {string} password - Contraseña
+   * @returns {Promise<Object>} Datos del usuario y token
+   */
   async login(correo_institucional, password) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          correo_institucional,
-          password,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Error en el login')
-      }
-
-      // Guardar token y datos del usuario
-      localStorage.setItem('requisiciones-uteq-token', data.data.token)
-      localStorage.setItem(
-        'requisiciones-uteq-user',
-        JSON.stringify(data.data.usuario)
-      )
-
-      return data
-    } catch (error) {
-      console.error('Error en login:', error)
-      throw error
+    if (!correo_institucional || !password) {
+      throw new Error('Correo y contraseña son requeridos')
     }
+
+    const response = await apiClient.post('/auth/login', {
+      correo_institucional,
+      password,
+    })
+
+    const data = response.data
+
+    if (!data.data?.token || !data.data?.usuario) {
+      throw new Error('Respuesta inválida del servidor')
+    }
+
+    // Guardar datos de autenticación
+    setAuthData(data.data.token, data.data.usuario)
+
+    return data
   }
 
-  // Logout
+  /**
+   * Cerrar sesión
+   * @returns {Promise<void>}
+   */
   async logout() {
     try {
-      const token = this.getToken()
+      const token = getToken()
 
       if (token) {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        // Intentar hacer logout en el servidor
+        await apiClient.post('/auth/logout')
       }
     } catch (error) {
-      console.error('Error en logout:', error)
+      console.error('Error en logout del servidor:', error)
+      // Continuar con limpieza local incluso si falla el logout del servidor
     } finally {
       // Limpiar datos locales independientemente del resultado
-      localStorage.removeItem('requisiciones-uteq-token')
-      localStorage.removeItem('requisiciones-uteq-user')
+      clearAuthData()
     }
   }
 
-  // Obtener perfil del usuario actual
+  /**
+   * Obtener perfil del usuario actual
+   * @returns {Promise<Object>} Datos del usuario
+   */
   async getMe() {
+    const token = getToken()
+
+    if (!token) {
+      throw new Error('No hay token disponible')
+    }
+
+    const response = await apiClient.get('/auth/me')
+    const data = response.data
+
+    if (!data.data?.usuario) {
+      throw new Error('Respuesta inválida del servidor')
+    }
+
+    // Actualizar datos del usuario en localStorage
+    const currentToken = getToken()
+    setAuthData(currentToken, data.data.usuario)
+
+    return data.data.usuario
+  }
+
+  /**
+   * Actualizar perfil del usuario
+   * @param {Object} userData - Datos a actualizar
+   * @returns {Promise<Object>} Usuario actualizado
+   */
+  async updateProfile(userData) {
+    if (!userData || Object.keys(userData).length === 0) {
+      throw new Error('Datos de usuario requeridos')
+    }
+
+    const response = await apiClient.put('/auth/profile', userData)
+    const data = response.data
+
+    if (data.data?.usuario) {
+      // Actualizar datos del usuario en localStorage
+      const currentToken = getToken()
+      setAuthData(currentToken, data.data.usuario)
+    }
+
+    return data.data.usuario
+  }
+
+  /**
+   * Cambiar contraseña
+   * @param {string} currentPassword - Contraseña actual
+   * @param {string} newPassword - Nueva contraseña
+   * @returns {Promise<Object>} Respuesta del servidor
+   */
+  async changePassword(currentPassword, newPassword) {
+    if (!currentPassword || !newPassword) {
+      throw new Error('Contraseña actual y nueva son requeridas')
+    }
+
+    if (newPassword.length < 6) {
+      throw new Error('La nueva contraseña debe tener al menos 6 caracteres')
+    }
+
+    const response = await apiClient.post('/auth/change-password', {
+      currentPassword,
+      newPassword,
+    })
+
+    return response.data
+  }
+
+  /**
+   * Solicitar recuperación de contraseña
+   * @param {string} correo_institucional - Correo institucional
+   * @returns {Promise<Object>} Respuesta del servidor
+   */
+  async requestPasswordReset(correo_institucional) {
+    if (!correo_institucional) {
+      throw new Error('Correo institucional requerido')
+    }
+
+    const response = await apiClient.post('/auth/forgot-password', {
+      correo_institucional,
+    })
+
+    return response.data
+  }
+
+  /**
+   * Restablecer contraseña con token
+   * @param {string} token - Token de recuperación
+   * @param {string} newPassword - Nueva contraseña
+   * @returns {Promise<Object>} Respuesta del servidor
+   */
+  async resetPassword(token, newPassword) {
+    if (!token || !newPassword) {
+      throw new Error('Token y nueva contraseña son requeridos')
+    }
+
+    if (newPassword.length < 6) {
+      throw new Error('La contraseña debe tener al menos 6 caracteres')
+    }
+
+    const response = await apiClient.post('/auth/reset-password', {
+      token,
+      newPassword,
+    })
+
+    return response.data
+  }
+
+  /**
+   * Refrescar token
+   * @returns {Promise<Object>} Nuevo token
+   */
+  async refreshToken() {
+    const response = await apiClient.post('/auth/refresh')
+    const data = response.data
+
+    if (data.data?.token) {
+      const currentUser = getStoredUser()
+      setAuthData(data.data.token, currentUser)
+    }
+
+    return data
+  }
+
+  /**
+   * Verificar si el token está expirado (validación básica)
+   * @returns {boolean} True si el token parece expirado
+   */
+  isTokenExpired() {
+    const token = getToken()
+    if (!token) return true
+
     try {
-      const token = this.getToken()
+      // Decodificar JWT básico (sin verificar firma)
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      const currentTime = Date.now() / 1000
 
-      if (!token) {
-        throw new Error('No hay token disponible')
-      }
-
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Error obteniendo perfil')
-      }
-
-      return data.data.usuario
+      return payload.exp < currentTime
     } catch (error) {
-      console.error('Error obteniendo perfil:', error)
-      throw error
+      console.error('Error checking token expiration:', error)
+      return true
     }
   }
 
-  // Verificar si el usuario está autenticado
-  isAuthenticated() {
-    const token = this.getToken()
-    const user = this.getUser()
-    return !!(token && user)
+  /**
+   * Verificar si el servicio de autenticación está disponible
+   * @returns {Promise<boolean>} Estado del servicio
+   */
+  async healthCheck() {
+    try {
+      const response = await apiClient.get('/auth/health')
+      return response.status === 200
+    } catch (error) {
+      console.warn('Auth health check failed:', error)
+      return false
+    }
   }
 
-  // Obtener token del localStorage
-  getToken() {
-    return localStorage.getItem('requisiciones-uteq-token')
-  }
+  // ===== MÉTODOS DE UTILIDAD DELEGADOS =====
 
-  // Obtener datos del usuario del localStorage
-  getUser() {
-    const userStr = localStorage.getItem('requisiciones-uteq-user')
-    return userStr ? JSON.parse(userStr) : null
-  }
+  /**
+   * Verificar si el usuario está autenticado
+   * @returns {boolean} Estado de autenticación
+   */
+  isAuthenticated = isAuthenticated
 
-  // Obtener headers con autorización
+  /**
+   * Obtener token del localStorage
+   * @returns {string|null} Token de autenticación
+   */
+  getToken = getToken
+
+  /**
+   * Obtener datos del usuario del localStorage
+   * @returns {Object|null} Datos del usuario
+   */
+  getUser = getStoredUser
+
+  /**
+   * Obtener rol del usuario actual
+   * @returns {string|null} Rol del usuario
+   */
+  getUserRole = getUserRole
+
+  /**
+   * Verificar si el usuario tiene un rol específico
+   * @param {string} role - Rol a verificar
+   * @returns {boolean} True si el usuario tiene el rol
+   */
+  hasRole = hasRole
+
+  /**
+   * Verificar si el usuario tiene permisos específicos
+   * @param {string|Array} permissions - Permisos a verificar
+   * @returns {boolean} True si el usuario tiene los permisos
+   */
+  hasPermission = hasPermission
+
+  /**
+   * Limpiar datos de autenticación
+   */
+  clearAuthData = clearAuthData
+
+  /**
+   * Obtener headers con autorización
+   * @returns {Object} Headers con token
+   */
   getAuthHeaders() {
-    const token = this.getToken()
+    const token = getToken()
     return {
       'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
@@ -114,4 +280,11 @@ class AuthService {
   }
 }
 
-export default new AuthService()
+// ===== INSTANCIA SINGLETON =====
+const authService = new AuthService()
+
+// ===== EXPORTACIÓN =====
+export default authService
+
+// Exportar también la clase para testing
+export { AuthService }
