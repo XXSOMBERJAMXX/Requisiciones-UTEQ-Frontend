@@ -1,4 +1,4 @@
-// ===== ARCHIVO: src/services/requestService.js =====
+// ===== ARCHIVO: src/services/requestService.js CORREGIDO =====
 import apiClient from './interceptors'
 import { 
   createFormData, 
@@ -52,15 +52,15 @@ class SolicitudesService {
 
     // Si la respuesta tiene estructura con datos y paginación
     if (data && typeof data === 'object') {
-      // Adaptar a la estructura esperada de PostgreSQL
+      // Adaptar a la estructura esperada del backend
       return {
-        solicitudes: data.solicitudes || data.data || data.results || data,
+        solicitudes: data.data || data.solicitudes || data.results || data,
         pagination: data.pagination ||
           data.meta || {
-            currentPage: data.currentPage || 1,
-            totalPages: data.totalPages || 1,
-            totalItems: data.totalItems || data.total || 0,
-            limit: data.limit || 20,
+            page: data.page || 1,
+            pages: data.pages || 1,
+            total: data.total || 0,
+            limit: data.limit || 10,
           },
         total: data.total || data.count || data.totalItems || 0,
       }
@@ -79,6 +79,41 @@ class SolicitudesService {
       solicitudes: [],
       pagination: null,
       total: 0,
+    }
+  }
+
+  /**
+   * Obtener mis solicitudes (para usuarios solicitantes)
+   * @param {Object} params - Parámetros de filtrado y paginación
+   * @returns {Promise<Object>} Lista de solicitudes del usuario
+   */
+  async getMySolicitudes(params = {}) {
+    const cleanedParams = cleanParams(params)
+
+    const response = await apiClient.get('/solicitudes/mis-solicitudes', {
+      params: cleanedParams,
+    })
+
+    const data = response.data
+
+    if (data && typeof data === 'object') {
+      return {
+        solicitudes: data.data || data.solicitudes || data.results || data,
+        pagination: data.pagination ||
+          data.meta || {
+            page: data.page || 1,
+            pages: data.pages || 1,
+            total: data.total || 0,
+            limit: data.limit || 10,
+          },
+        total: data.total || data.count || data.totalItems || 0,
+      }
+    }
+
+    return {
+      solicitudes: Array.isArray(data) ? data : [],
+      pagination: null,
+      total: Array.isArray(data) ? data.length : 0,
     }
   }
 
@@ -120,17 +155,29 @@ class SolicitudesService {
   }
 
   /**
-   * Actualizar solo el estado de una solicitud
+   * Actualizar solo el estado de una solicitud (MÉTODO GENÉRICO - NO RECOMENDADO)
    * @param {string|number} id - ID de la solicitud
    * @param {string} estatus - Nuevo estado
    * @param {string} comentarios - Comentarios del cambio
    * @returns {Promise<Object>} Solicitud actualizada
+   * @deprecated Usar métodos específicos como approve() o cancel()
    */
   async updateStatus(id, estatus, comentarios = '') {
     if (!id || !estatus) {
       throw new Error('ID y estatus son requeridos')
     }
 
+    console.warn('updateStatus está deprecated. Usar métodos específicos como approve() o cancel()')
+
+    // Para compatibilidad, redirigir a métodos específicos
+    if (estatus === 'aprobada') {
+      return this.approve(id, comentarios)
+    }
+    if (estatus === 'denegada') {
+      return this.cancel(id, comentarios)
+    }
+
+    // Para otros estados, usar endpoint genérico (si existe)
     const response = await apiClient.patch(`/solicitudes/${id}/status`, {
       estatus,
       comentarios,
@@ -140,27 +187,49 @@ class SolicitudesService {
   }
 
   /**
-   * Aprobar solicitud
+   * Aprobar solicitud - CORREGIDO para usar la ruta correcta
    * @param {string|number} id - ID de la solicitud
-   * @param {string} comentarios - Comentarios de la aprobación
+   * @param {string} comentario - Comentarios de la aprobación
    * @returns {Promise<Object>} Solicitud aprobada
    */
-  async approve(id, comentarios = '') {
-    return this.updateStatus(id, 'aprobada', comentarios)
+  async approve(id, comentario = '') {
+    if (!id) throw new Error('ID de solicitud requerido')
+
+    const response = await apiClient.patch(`/solicitudes/${id}/aprobar`, {
+      comentario, // Nota: el backend espera 'comentario', no 'comentarios'
+    })
+
+    return response.data
   }
 
   /**
-   * Denegar solicitud
+   * Denegar/Cancelar solicitud - CORREGIDO para usar la ruta correcta
+   * @param {string|number} id - ID de la solicitud
+   * @param {string} motivo_cancelacion - Motivo de la cancelación
+   * @returns {Promise<Object>} Solicitud cancelada
+   */
+  async cancel(id, motivo_cancelacion = '') {
+    if (!id) throw new Error('ID de solicitud requerido')
+
+    const response = await apiClient.patch(`/solicitudes/${id}/cancelar`, {
+      motivo_cancelacion, // El backend espera este campo específico
+    })
+
+    return response.data
+  }
+
+  /**
+   * Alias para cancel() - para mantener compatibilidad
    * @param {string|number} id - ID de la solicitud
    * @param {string} comentarios - Comentarios de la denegación
    * @returns {Promise<Object>} Solicitud denegada
    */
   async deny(id, comentarios = '') {
-    return this.updateStatus(id, 'denegada', comentarios)
+    return this.cancel(id, comentarios)
   }
 
   /**
-   * Eliminar solicitud
+   * Eliminar solicitud (si está implementado en el backend)
    * @param {string|number} id - ID de la solicitud
    * @returns {Promise<Object>} Confirmación de eliminación
    */
@@ -174,12 +243,12 @@ class SolicitudesService {
   // ===== MÉTODOS ADICIONALES =====
 
   /**
-   * Obtener estadísticas del dashboard
+   * Obtener estadísticas del dashboard - CORREGIDO para usar la ruta correcta
    * @param {Object} filtros - Filtros para las estadísticas
    * @returns {Promise<Object>} Estadísticas
    */
   async getStats(filtros = {}) {
-    const response = await apiClient.get('/solicitudes/stats', {
+    const response = await apiClient.get('/solicitudes/estadisticas', {
       params: cleanParams(filtros),
     })
     return response.data
@@ -194,6 +263,18 @@ class SolicitudesService {
     if (!id) throw new Error('ID de solicitud requerido')
 
     const response = await apiClient.get(`/solicitudes/${id}/history`)
+    return response.data
+  }
+
+  /**
+   * Obtener aprobaciones de una solicitud
+   * @param {string|number} id - ID de la solicitud
+   * @returns {Promise<Array>} Lista de aprobaciones
+   */
+  async getAprobaciones(id) {
+    if (!id) throw new Error('ID de solicitud requerido')
+
+    const response = await apiClient.get(`/solicitudes/${id}/aprobaciones`)
     return response.data
   }
 
@@ -308,6 +389,72 @@ class SolicitudesService {
       baseURL: apiClient.defaults.baseURL,
       timeout: apiClient.defaults.timeout,
     }
+  }
+
+  // ===== MÉTODOS PARA FLUJO DE APROBACIÓN =====
+
+  /**
+   * Verificar si una solicitud puede ser aprobada por el usuario actual
+   * @param {Object} solicitud - Datos de la solicitud
+   * @param {Object} usuario - Datos del usuario actual
+   * @returns {boolean} Puede aprobar o no
+   */
+  canApprove(solicitud, usuario) {
+    // Verificar rol
+    const rolesPermitidos = ['aprobador', 'administrativo', 'admin_sistema']
+    if (!rolesPermitidos.includes(usuario.rol)) return false
+
+    // No puede aprobar su propia solicitud
+    if (solicitud.solicitante_id === usuario.id_usuario) return false
+
+    // Verificar estado
+    const estadosAprobables = ['pendiente', 'en_revision']
+    if (!estadosAprobables.includes(solicitud.estatus)) return false
+
+    return true
+  }
+
+  /**
+   * Verificar si una solicitud puede ser cancelada por el usuario actual
+   * @param {Object} solicitud - Datos de la solicitud
+   * @param {Object} usuario - Datos del usuario actual
+   * @returns {boolean} Puede cancelar o no
+   */
+  canCancel(solicitud, usuario) {
+    // Roles que pueden cancelar
+    const rolesPermitidos = ['solicitante', 'admin_sistema', 'administrativo']
+    if (!rolesPermitidos.includes(usuario.rol)) return false
+
+    // Si es solicitante, solo puede cancelar sus propias solicitudes
+    if (usuario.rol === 'solicitante' && solicitud.solicitante_id !== usuario.id_usuario) {
+      return false
+    }
+
+    // Verificar estado
+    const estadosCancelables = ['pendiente', 'en_revision', 'aprobada', 'en_proceso']
+    if (!estadosCancelables.includes(solicitud.estatus)) return false
+
+    return true
+  }
+
+  /**
+   * Verificar si una solicitud puede ser editada por el usuario actual
+   * @param {Object} solicitud - Datos de la solicitud
+   * @param {Object} usuario - Datos del usuario actual
+   * @returns {boolean} Puede editar o no
+   */
+  canEdit(solicitud, usuario) {
+    // Solo el solicitante puede editar (o admin)
+    if (usuario.rol === 'solicitante' && solicitud.solicitante_id !== usuario.id_usuario) {
+      return false
+    }
+
+    // Admin siempre puede editar
+    if (['admin_sistema', 'administrativo'].includes(usuario.rol)) return true
+
+    // Verificar estado
+    const estadosEditables = ['pendiente', 'en_revision']
+    return estadosEditables.includes(solicitud.estatus)
   }
 }
 
