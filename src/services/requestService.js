@@ -131,7 +131,7 @@ class SolicitudesService {
       throw new Error('ID y estatus son requeridos')
     }
 
-    const response = await apiClient.patch(`/solicitudes/${id}/status`, {
+    const response = await apiClient.put(`/solicitudes/${id}`, {
       estatus,
       comentarios,
     })
