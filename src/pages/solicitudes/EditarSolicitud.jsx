@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import solicitudesService from '../../services/requestService'
+import solicitudesService from '../../services/solicitudesService'
 import { useAuth } from '../../hooks/useAuth'
 import SolicitudesLayout from '../../components/layouts/SolicitudesLayout'
 import TablaItemsSolicitud from '../../components/solicitudes/TablaItemsSolicitud'
@@ -64,14 +64,6 @@ const EditarSolicitud = () => {
 
       const response = await solicitudesService.getById(id)
       const solicitud = response.data || response
-
-      // Verificar permisos para editar
-      if (
-        solicitud.solicitante_id !== user.id_usuario &&
-        user.rol !== 'admin_sistema'
-      ) {
-        throw new Error('No tienes permisos para editar esta solicitud')
-      }
 
       // Verificar que la solicitud se pueda editar
       if (

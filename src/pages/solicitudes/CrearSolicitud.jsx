@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import solicitudesService from '../../services/requestService'
+import solicitudesService from '../../services/solicitudesService'
 import { useAuth } from '../../hooks/useAuth'
 import SolicitudesLayout from '../../components/layouts/SolicitudesLayout'
 import TablaItemsSolicitud from '../../components/solicitudes/TablaItemsSolicitud'
@@ -35,7 +35,6 @@ const CrearSolicitud = () => {
     {
       nombre: '',
       cantidad: '',
-      unidad: '',
       precio_estimado: '',
       justificacion: '',
     },
@@ -72,7 +71,6 @@ const CrearSolicitud = () => {
       {
         nombre: '',
         cantidad: '',
-        unidad: '',
         precio_estimado: '',
         justificacion: '',
       },
@@ -130,7 +128,7 @@ const CrearSolicitud = () => {
 
     // Validar que al menos haya un ítem válido
     const itemsValidos = items.filter(
-      (item) => item.nombre.trim() && item.cantidad && item.unidad.trim()
+      (item) => item.nombre.trim() && item.cantidad
     )
 
     if (itemsValidos.length === 0) {
@@ -158,7 +156,7 @@ const CrearSolicitud = () => {
         solicitante_id: user.id,
         departamento_id: user.departamento_id,
         items: items.filter(
-          (item) => item.nombre.trim() && item.cantidad && item.unidad.trim()
+          (item) => item.nombre.trim() && item.cantidad
         ),
         presupuesto_estimado:
           datosSolicitud.presupuesto_estimado || calcularPresupuestoTotal(),

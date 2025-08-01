@@ -1,119 +1,90 @@
-// ===== ARCHIVO: src/services/authService.js =====
-import apiClient from './interceptors'
-import { 
-  setAuthData, 
-  clearAuthData, 
-  getToken, 
-  getStoredUser, 
-  isAuthenticated,
-  getUserRole,
-  hasRole,
-  hasPermission
-} from './interceptors'
+// ===== ARCHIVO: src/services/authService.js - VERSIÓN SIMPLE =====
+import BaseService from './api/BaseService'
+import { API_CONFIG } from './api/config'
 
-// ===== CLASE AUTHSERVICE =====
-class AuthService {
+class AuthService extends BaseService {
+  constructor() {
+    super('/auth')
+  }
+
+  // ===== MÉTODOS DE AUTENTICACIÓN =====
+
   /**
    * Iniciar sesión
-   * @param {string} correo_institucional - Correo institucional
-   * @param {string} password - Contraseña
-   * @returns {Promise<Object>} Datos del usuario y token
    */
   async login(correo_institucional, password) {
     if (!correo_institucional || !password) {
       throw new Error('Correo y contraseña son requeridos')
     }
 
-    const response = await apiClient.post('/auth/login', {
+    const response = await this.client.post(`${this.baseUrl}/login`, {
       correo_institucional,
       password,
     })
 
-    const data = response.data
+    const result = this.formatResponse(response)
 
-    if (!data.data?.token || !data.data?.usuario) {
+    if (!result.data?.token || !result.data?.usuario) {
       throw new Error('Respuesta inválida del servidor')
     }
 
-    // Guardar datos de autenticación
-    setAuthData(data.data.token, data.data.usuario)
+    // Guardar datos
+    this.setAuthData(result.data.token, result.data.usuario)
 
-    return data
+    return result
   }
 
   /**
    * Cerrar sesión
-   * @returns {Promise<void>}
    */
   async logout() {
     try {
-      const token = getToken()
-
-      if (token) {
-        // Intentar hacer logout en el servidor
-        await apiClient.post('/auth/logout')
+      if (this.getToken()) {
+        await this.client.post(`${this.baseUrl}/logout`)
       }
     } catch (error) {
       console.error('Error en logout del servidor:', error)
-      // Continuar con limpieza local incluso si falla el logout del servidor
     } finally {
-      // Limpiar datos locales independientemente del resultado
-      clearAuthData()
+      this.clearAuthData()
     }
   }
 
   /**
-   * Obtener perfil del usuario actual
-   * @returns {Promise<Object>} Datos del usuario
+   * Obtener perfil del usuario
    */
   async getMe() {
-    const token = getToken()
+    const token = this.getToken()
+    if (!token) throw new Error('No hay token disponible')
 
-    if (!token) {
-      throw new Error('No hay token disponible')
+    const response = await this.client.get(`${this.baseUrl}/me`)
+    const result = this.formatResponse(response)
+
+    if (result.data?.usuario) {
+      this.setAuthData(token, result.data.usuario)
     }
 
-    const response = await apiClient.get('/auth/me')
-    const data = response.data
-
-    if (!data.data?.usuario) {
-      throw new Error('Respuesta inválida del servidor')
-    }
-
-    // Actualizar datos del usuario en localStorage
-    const currentToken = getToken()
-    setAuthData(currentToken, data.data.usuario)
-
-    return data.data.usuario
+    return result.data.usuario
   }
 
   /**
-   * Actualizar perfil del usuario
-   * @param {Object} userData - Datos a actualizar
-   * @returns {Promise<Object>} Usuario actualizado
+   * Actualizar perfil
    */
   async updateProfile(userData) {
-    if (!userData || Object.keys(userData).length === 0) {
-      throw new Error('Datos de usuario requeridos')
+    if (!userData) throw new Error('Datos de usuario requeridos')
+
+    const response = await this.client.put(`${this.baseUrl}/profile`, userData)
+    const result = this.formatResponse(response)
+
+    if (result.data?.usuario) {
+      const currentToken = this.getToken()
+      this.setAuthData(currentToken, result.data.usuario)
     }
 
-    const response = await apiClient.put('/auth/profile', userData)
-    const data = response.data
-
-    if (data.data?.usuario) {
-      // Actualizar datos del usuario en localStorage
-      const currentToken = getToken()
-      setAuthData(currentToken, data.data.usuario)
-    }
-
-    return data.data.usuario
+    return result.data.usuario
   }
 
   /**
    * Cambiar contraseña
-   * @param {string} currentPassword - Contraseña actual
-   * @param {string} newPassword - Nueva contraseña
-   * @returns {Promise<Object>} Respuesta del servidor
    */
   async changePassword(currentPassword, newPassword) {
     if (!currentPassword || !newPassword) {
@@ -124,36 +95,31 @@ class AuthService {
       throw new Error('La nueva contraseña debe tener al menos 6 caracteres')
     }
 
-    const response = await apiClient.post('/auth/change-password', {
+    const response = await this.client.post(`${this.baseUrl}/change-password`, {
       currentPassword,
       newPassword,
     })
 
-    return response.data
+    return this.formatResponse(response)
   }
 
   /**
    * Solicitar recuperación de contraseña
-   * @param {string} correo_institucional - Correo institucional
-   * @returns {Promise<Object>} Respuesta del servidor
    */
   async requestPasswordReset(correo_institucional) {
     if (!correo_institucional) {
       throw new Error('Correo institucional requerido')
     }
 
-    const response = await apiClient.post('/auth/forgot-password', {
+    const response = await this.client.post(`${this.baseUrl}/forgot-password`, {
       correo_institucional,
     })
 
-    return response.data
+    return this.formatResponse(response)
   }
 
   /**
-   * Restablecer contraseña con token
-   * @param {string} token - Token de recuperación
-   * @param {string} newPassword - Nueva contraseña
-   * @returns {Promise<Object>} Respuesta del servidor
+   * Restablecer contraseña
    */
   async resetPassword(token, newPassword) {
     if (!token || !newPassword) {
@@ -164,115 +130,211 @@ class AuthService {
       throw new Error('La contraseña debe tener al menos 6 caracteres')
     }
 
-    const response = await apiClient.post('/auth/reset-password', {
+    const response = await this.client.post(`${this.baseUrl}/reset-password`, {
       token,
       newPassword,
     })
 
-    return response.data
+    return this.formatResponse(response)
   }
 
   /**
    * Refrescar token
-   * @returns {Promise<Object>} Nuevo token
    */
   async refreshToken() {
-    const response = await apiClient.post('/auth/refresh')
-    const data = response.data
+    const response = await this.client.post(`${this.baseUrl}/refresh`)
+    const result = this.formatResponse(response)
 
-    if (data.data?.token) {
-      const currentUser = getStoredUser()
-      setAuthData(data.data.token, currentUser)
+    if (result.data?.token) {
+      const currentUser = this.getStoredUser()
+      this.setAuthData(result.data.token, currentUser)
     }
 
-    return data
+    return result
   }
 
+  // ===== MÉTODOS DE VALIDACIÓN =====
+
   /**
-   * Verificar si el token está expirado (validación básica)
-   * @returns {boolean} True si el token parece expirado
+   * Verificar si el token está expirado
    */
   isTokenExpired() {
-    const token = getToken()
+    const token = this.getToken()
     if (!token) return true
 
     try {
-      // Decodificar JWT básico (sin verificar firma)
-      const payload = JSON.parse(atob(token.split('.')[1]))
-      const currentTime = Date.now() / 1000
+      const parts = token.split('.')
+      if (parts.length !== 3) return true
 
-      return payload.exp < currentTime
+      const payload = JSON.parse(atob(parts[1]))
+      if (!payload.exp) return true
+
+      const currentTime = Math.floor(Date.now() / 1000)
+      const isExpired = payload.exp < currentTime
+
+      if (isExpired) {
+        console.log('⏰ Token expirado:', {
+          expira: new Date(payload.exp * 1000),
+          ahora: new Date(),
+        })
+      }
+
+      return isExpired
     } catch (error) {
-      console.error('Error checking token expiration:', error)
+      console.error('Error verificando expiración del token:', error)
       return true
     }
   }
 
   /**
-   * Verificar si el servicio de autenticación está disponible
-   * @returns {Promise<boolean>} Estado del servicio
+   * Verificar si está autenticado
    */
-  async healthCheck() {
+  isAuthenticated() {
+    const token = this.getToken()
+    const user = this.getStoredUser()
+    return !!(token && user && !this.isTokenExpired())
+  }
+
+  /**
+   * Obtener tiempo restante del token
+   */
+  getTokenTimeRemaining() {
+    const token = this.getToken()
+    if (!token) return 0
+
     try {
-      const response = await apiClient.get('/auth/health')
-      return response.status === 200
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      if (!payload.exp) return 0
+
+      const currentTime = Math.floor(Date.now() / 1000)
+      return Math.max(0, payload.exp - currentTime)
     } catch (error) {
-      console.warn('Auth health check failed:', error)
-      return false
+      console.log(error)
+      return 0
     }
   }
 
-  // ===== MÉTODOS DE UTILIDAD DELEGADOS =====
-
   /**
-   * Verificar si el usuario está autenticado
-   * @returns {boolean} Estado de autenticación
+   * Verificar si el token expirará pronto
    */
-  isAuthenticated = isAuthenticated
+  willTokenExpireSoon(minutesThreshold = 15) {
+    const timeRemaining = this.getTokenTimeRemaining()
+    const thresholdSeconds = minutesThreshold * 60
+    return timeRemaining > 0 && timeRemaining <= thresholdSeconds
+  }
+
+  // ===== MÉTODOS DE DATOS =====
 
   /**
    * Obtener token del localStorage
-   * @returns {string|null} Token de autenticación
    */
-  getToken = getToken
+  getToken() {
+    try {
+      const token = localStorage.getItem('requisiciones-uteq-token') // Usar tu clave exacta
+      console.log('🔑 Token obtenido:', token ? 'existe' : 'no existe')
+      return token
+    } catch (error) {
+      console.error('Error obteniendo token:', error)
+      return null
+    }
+  }
 
   /**
-   * Obtener datos del usuario del localStorage
-   * @returns {Object|null} Datos del usuario
+   * Obtener usuario guardado del localStorage
    */
-  getUser = getStoredUser
+  getStoredUser() {
+    try {
+      const userStr = localStorage.getItem('requisiciones-uteq-user') // Usar tu clave exacta
+      if (!userStr) {
+        console.log('👤 No hay usuario guardado')
+        return null
+      }
+
+      const user = JSON.parse(userStr)
+      console.log('👤 Usuario obtenido:', user?.nombre || 'sin nombre')
+      return user
+    } catch (error) {
+      console.error('Error parseando usuario guardado:', error)
+      localStorage.removeItem('requisiciones-uteq-user')
+      return null
+    }
+  }
 
   /**
-   * Obtener rol del usuario actual
-   * @returns {string|null} Rol del usuario
+   * Guardar datos de autenticación
    */
-  getUserRole = getUserRole
-
-  /**
-   * Verificar si el usuario tiene un rol específico
-   * @param {string} role - Rol a verificar
-   * @returns {boolean} True si el usuario tiene el rol
-   */
-  hasRole = hasRole
-
-  /**
-   * Verificar si el usuario tiene permisos específicos
-   * @param {string|Array} permissions - Permisos a verificar
-   * @returns {boolean} True si el usuario tiene los permisos
-   */
-  hasPermission = hasPermission
+  setAuthData(token, user) {
+    try {
+      localStorage.setItem('requisiciones-uteq-token', token)
+      localStorage.setItem('requisiciones-uteq-user', JSON.stringify(user))
+      console.log('💾 Datos guardados:', {
+        token: 'guardado',
+        user: user?.nombre,
+      })
+    } catch (error) {
+      console.error('Error guardando datos de auth:', error)
+    }
+  }
 
   /**
    * Limpiar datos de autenticación
    */
-  clearAuthData = clearAuthData
+  clearAuthData() {
+    try {
+      localStorage.removeItem('requisiciones-uteq-token')
+      localStorage.removeItem('requisiciones-uteq-user')
+      console.log('🧹 Datos de auth limpiados')
+    } catch (error) {
+      console.error('Error limpiando datos de auth:', error)
+    }
+  }
+
+  // ===== MÉTODOS DE AUTORIZACIÓN =====
 
   /**
-   * Obtener headers con autorización
-   * @returns {Object} Headers con token
+   * Obtener rol del usuario
+   */
+  getUserRole() {
+    const user = this.getStoredUser()
+    return user?.rol || null
+  }
+
+  /**
+   * Verificar si tiene un rol específico
+   */
+  hasRole(role) {
+    return this.getUserRole() === role
+  }
+
+  /**
+   * Verificar permisos
+   */
+  hasPermission(permissions) {
+    const user = this.getStoredUser()
+    if (!user?.permisos) return false
+
+    const userPermissions = user.permisos || []
+    const permissionsArray = Array.isArray(permissions)
+      ? permissions
+      : [permissions]
+
+    return permissionsArray.every((permission) =>
+      userPermissions.includes(permission)
+    )
+  }
+
+  /**
+   * Obtener usuario actual
+   */
+  getCurrentUser() {
+    return this.getStoredUser()
+  }
+
+  /**
+   * Obtener headers de autorización
    */
   getAuthHeaders() {
-    const token = getToken()
+    const token = this.getToken()
     return {
       'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
@@ -280,11 +342,8 @@ class AuthService {
   }
 }
 
-// ===== INSTANCIA SINGLETON =====
+// Instancia singleton
 const authService = new AuthService()
 
-// ===== EXPORTACIÓN =====
 export default authService
-
-// Exportar también la clase para testing
 export { AuthService }

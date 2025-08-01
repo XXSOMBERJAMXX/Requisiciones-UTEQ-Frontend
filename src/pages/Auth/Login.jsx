@@ -1,12 +1,10 @@
-// ===== ARCHIVO: src/pages/auth/Login.jsx MEJORADO =====
 import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
   
 const Login = () => {
-  const navigate = useNavigate();
   const { login, loading, error, isAuthenticated } = useAuth();
   
   const [formData, setFormData] = useState({
@@ -16,7 +14,8 @@ const Login = () => {
   const [formErrors, setFormErrors] = useState({});
 
   // Si ya está autenticado, redirigir al dashboard
-  if (isAuthenticated) {
+  // IMPORTANTE: Verificar que no esté en loading antes de redirigir
+  if (isAuthenticated && !loading) {
     return <Navigate to="/solicitudes" replace />;
   }
 
@@ -65,17 +64,26 @@ const Login = () => {
     try {
       await login(formData.correo_institucional, formData.password);
       
-      // Si el login es exitoso, redirigir
-      navigate('/solicitudes');
+      // Si llegamos aquí, el login fue exitoso
+      // El Navigate se encargará de la redirección automáticamente
     } catch (error) {
       console.error('Error en login:', error);
       // El error ya se maneja en el hook useAuth
     }
   };
 
+  // Mostrar loading mientras se inicializa la autenticación
+  if (loading && !formData.correo_institucional && !formData.password) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
-      <div className="bg-gray-900 p-8 rounded-xl shadow-2xl w-full max-w-md transform transition-all duration-300 hover:scale-[1.01] border border-gray-700">
+      <div className="bg-gray-900 p-8 rounded-xl shadow-2xl w-full max-w-md border border-gray-700">
         <div className="text-center mb-8">
           <img 
             src="https://placehold.co/80x80/1F2937/60A5FA?text=UTEQ" 
@@ -93,7 +101,7 @@ const Login = () => {
           </div>
         )}
 
-        <form onSubmit={handleLogin}>
+        <form onSubmit={handleLogin} className="space-y-4">
           <Input 
             id="correo_institucional"
             name="correo_institucional"
@@ -121,7 +129,7 @@ const Login = () => {
           <Button 
             type="submit" 
             variant="primary" 
-            className="w-full mt-6 text-lg py-3 shadow-lg hover:shadow-xl"
+            className="w-full mt-6 text-lg py-3"
             disabled={loading}
           >
             {loading ? (

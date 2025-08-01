@@ -30,14 +30,14 @@ const FiltrosSolicitudes = ({
         </h3>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+          <div className="relative flex-col justify-between">
             <Input
+              label="Buscador"
               type="text"
               placeholder="Buscar por folio, descripción..."
               value={terminoBusqueda}
               onChange={onCambioBusqueda}
-              className="pl-10"
+              className='h'
             />
           </div>
 
