@@ -1,15 +1,12 @@
-// ===== ARCHIVO: src/services/requestService.js CORREGIDO =====
-import apiClient from './interceptors'
-import { 
-  createFormData, 
-  validateFile, 
-  cleanParams, 
-  downloadBlob 
-} from './interceptors'
+// ===== ARCHIVO: src/services/solicitudesService.js REFACTORIZADO =====
+import BaseService from './api/BaseService'
 
-// ===== CLASE SOLICITUDESSERVICE =====
-class SolicitudesService {
-  // ===== MÉTODOS CRUD =====
+class SolicitudesService extends BaseService {
+  constructor() {
+    super('/solicitudes')
+  }
+
+  // ===== MÉTODOS CRUD HEREDADOS Y PERSONALIZADOS =====
 
   /**
    * Crear nueva solicitud
@@ -18,67 +15,35 @@ class SolicitudesService {
    * @returns {Promise<Object>} Respuesta del servidor
    */
   async create(solicitudData, archivos = []) {
+    // Validar datos antes de enviar
+    this.validateSolicitudData(solicitudData)
+
     // Validar archivos
-    archivos.forEach(validateFile)
+    if (archivos.length > 0) {
+      archivos.forEach(file => this.validateFile(file))
+    }
 
-    // Crear FormData usando la utilidad centralizada
-    const formData = createFormData(solicitudData, archivos)
-
-    const response = await apiClient.post('/solicitudes', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
-
-    return response.data
+    return await super.create(solicitudData, archivos)
   }
 
   /**
    * Obtener todas las solicitudes con filtros y paginación
    * @param {Object} params - Parámetros de filtrado y paginación
-   * @returns {Promise<Object>} Lista de solicitudes
+   * @returns {Promise<Object>} Lista de solicitudes con estructura adaptada
    */
   async getAll(params = {}) {
-    const cleanedParams = cleanParams(params)
-
-    console.log('Fetching solicitudes with params:', cleanedParams)
-
-    const response = await apiClient.get('/solicitudes', {
-      params: cleanedParams,
-    })
-
-    // Manejar diferentes estructuras de respuesta del backend
-    const data = response.data
-
-    // Si la respuesta tiene estructura con datos y paginación
-    if (data && typeof data === 'object') {
-      // Adaptar a la estructura esperada del backend
-      return {
-        solicitudes: data.data || data.solicitudes || data.results || data,
-        pagination: data.pagination ||
-          data.meta || {
-            page: data.page || 1,
-            pages: data.pages || 1,
-            total: data.total || 0,
-            limit: data.limit || 10,
-          },
-        total: data.total || data.count || data.totalItems || 0,
-      }
-    }
-
-    // Si la respuesta es directamente un array
-    if (Array.isArray(data)) {
-      return {
-        solicitudes: data,
-        pagination: null,
-        total: data.length,
-      }
-    }
-
+    const response = await super.getAll(params)
+    
+    // Adaptar respuesta para mantener compatibilidad con el frontend existente
     return {
-      solicitudes: [],
-      pagination: null,
-      total: 0,
+      solicitudes: response.data?.data || response.data?.solicitudes || response.data?.results || response.data || [],
+      pagination: response.data?.pagination || response.data?.meta || {
+        page: response.data?.page || 1,
+        pages: response.data?.pages || 1,
+        total: response.data?.total || 0,
+        limit: response.data?.limit || 10,
+      },
+      total: response.data?.total || response.data?.count || response.data?.totalItems || 0,
     }
   }
 
@@ -88,45 +53,26 @@ class SolicitudesService {
    * @returns {Promise<Object>} Lista de solicitudes del usuario
    */
   async getMySolicitudes(params = {}) {
-    const cleanedParams = cleanParams(params)
-
-    const response = await apiClient.get('/solicitudes/mis-solicitudes', {
+    const cleanedParams = this.cleanParams(params)
+    
+    const response = await this.client.get(`${this.baseUrl}/mis-solicitudes`, {
       params: cleanedParams,
     })
 
-    const data = response.data
+    const result = this.formatResponse(response)
+    const data = result.data
 
-    if (data && typeof data === 'object') {
-      return {
-        solicitudes: data.data || data.solicitudes || data.results || data,
-        pagination: data.pagination ||
-          data.meta || {
-            page: data.page || 1,
-            pages: data.pages || 1,
-            total: data.total || 0,
-            limit: data.limit || 10,
-          },
-        total: data.total || data.count || data.totalItems || 0,
-      }
-    }
-
+    // Adaptar estructura para compatibilidad
     return {
-      solicitudes: Array.isArray(data) ? data : [],
-      pagination: null,
-      total: Array.isArray(data) ? data.length : 0,
+      solicitudes: data?.data || data?.solicitudes || data?.results || data || [],
+      pagination: data?.pagination || data?.meta || {
+        page: data?.page || 1,
+        pages: data?.pages || 1,
+        total: data?.total || 0,
+        limit: data?.limit || 10,
+      },
+      total: data?.total || data?.count || data?.totalItems || 0,
     }
-  }
-
-  /**
-   * Obtener solicitud por ID
-   * @param {string|number} id - ID de la solicitud
-   * @returns {Promise<Object>} Datos de la solicitud
-   */
-  async getById(id) {
-    if (!id) throw new Error('ID de solicitud requerido')
-
-    const response = await apiClient.get(`/solicitudes/${id}`)
-    return response.data
   }
 
   /**
@@ -137,29 +83,57 @@ class SolicitudesService {
    * @returns {Promise<Object>} Solicitud actualizada
    */
   async update(id, solicitudData, archivos = []) {
+    // Validar archivos si existen
+    if (archivos.length > 0) {
+      archivos.forEach(file => this.validateFile(file))
+    }
+
+    return await super.update(id, solicitudData, archivos)
+  }
+
+  // ===== MÉTODOS DE WORKFLOW =====
+
+  /**
+   * Aprobar solicitud
+   * @param {string|number} id - ID de la solicitud
+   * @param {string} comentario - Comentarios de la aprobación
+   * @returns {Promise<Object>} Solicitud aprobada
+   */
+  async approve(id, comentario = '') {
     if (!id) throw new Error('ID de solicitud requerido')
 
-    // Validar archivos
-    archivos.forEach(validateFile)
-
-    // Crear FormData usando la utilidad centralizada
-    const formData = createFormData(solicitudData, archivos)
-
-    const response = await apiClient.put(`/solicitudes/${id}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    const response = await this.client.patch(`${this.baseUrl}/${id}/aprobar`, {
+      comentario,
     })
 
-    return response.data
+    return this.formatResponse(response)
+  }
+
+  /**
+   * Denegar/Cancelar solicitud
+   * @param {string|number} id - ID de la solicitud
+   * @param {string} motivo_cancelacion - Motivo de la cancelación
+   * @returns {Promise<Object>} Solicitud cancelada
+   */
+  async cancel(id, motivo_cancelacion = '') {
+    if (!id) throw new Error('ID de solicitud requerido')
+
+    const response = await this.client.patch(`${this.baseUrl}/${id}/cancelar`, {
+      motivo_cancelacion,
+    })
+
+    return this.formatResponse(response)
+  }
+
+  /**
+   * Alias para cancel() - para mantener compatibilidad
+   */
+  async deny(id, comentarios = '') {
+    return this.cancel(id, comentarios)
   }
 
   /**
    * Actualizar solo el estado de una solicitud (MÉTODO GENÉRICO - NO RECOMENDADO)
-   * @param {string|number} id - ID de la solicitud
-   * @param {string} estatus - Nuevo estado
-   * @param {string} comentarios - Comentarios del cambio
-   * @returns {Promise<Object>} Solicitud actualizada
    * @deprecated Usar métodos específicos como approve() o cancel()
    */
   async updateStatus(id, estatus, comentarios = '') {
@@ -169,7 +143,7 @@ class SolicitudesService {
 
     console.warn('updateStatus está deprecated. Usar métodos específicos como approve() o cancel()')
 
-    // Para compatibilidad, redirigir a métodos específicos
+    // Redirigir a métodos específicos
     if (estatus === 'aprobada') {
       return this.approve(id, comentarios)
     }
@@ -177,81 +151,45 @@ class SolicitudesService {
       return this.cancel(id, comentarios)
     }
 
-    // Para otros estados, usar endpoint genérico (si existe)
-    const response = await apiClient.patch(`/solicitudes/${id}/status`, {
+    // Para otros estados, usar endpoint genérico
+    const response = await this.client.patch(`${this.baseUrl}/${id}/status`, {
       estatus,
       comentarios,
     })
 
-    return response.data
+    return this.formatResponse(response)
   }
 
   /**
-   * Aprobar solicitud - CORREGIDO para usar la ruta correcta
+   * Eliminar solicitud
    * @param {string|number} id - ID de la solicitud
-   * @param {string} comentario - Comentarios de la aprobación
-   * @returns {Promise<Object>} Solicitud aprobada
-   */
-  async approve(id, comentario = '') {
-    if (!id) throw new Error('ID de solicitud requerido')
-
-    const response = await apiClient.patch(`/solicitudes/${id}/aprobar`, {
-      comentario, // Nota: el backend espera 'comentario', no 'comentarios'
-    })
-
-    return response.data
-  }
-
-  /**
-   * Denegar/Cancelar solicitud - CORREGIDO para usar la ruta correcta
-   * @param {string|number} id - ID de la solicitud
-   * @param {string} motivo_cancelacion - Motivo de la cancelación
-   * @returns {Promise<Object>} Solicitud cancelada
-   */
-  async cancel(id, motivo_cancelacion = '') {
-    if (!id) throw new Error('ID de solicitud requerido')
-
-    const response = await apiClient.patch(`/solicitudes/${id}/cancelar`, {
-      motivo_cancelacion, // El backend espera este campo específico
-    })
-
-    return response.data
-  }
-
-  /**
-   * Alias para cancel() - para mantener compatibilidad
-   * @param {string|number} id - ID de la solicitud
-   * @param {string} comentarios - Comentarios de la denegación
-   * @returns {Promise<Object>} Solicitud denegada
-   */
-  async deny(id, comentarios = '') {
-    return this.cancel(id, comentarios)
-  }
-
-  /**
-   * Eliminar solicitud (si está implementado en el backend)
-   * @param {string|number} id - ID de la solicitud
+   * @param {string} motivo - Motivo de eliminación
    * @returns {Promise<Object>} Confirmación de eliminación
    */
-  async delete(id) {
+  async delete(id, motivo = '') {
     if (!id) throw new Error('ID de solicitud requerido')
 
-    const response = await apiClient.delete(`/solicitudes/${id}`)
-    return response.data
+    const response = await this.client.delete(`${this.baseUrl}/${id}`, {
+      data: {
+        confirmacion: 'ELIMINAR',
+        motivo_eliminacion: motivo,
+      },
+    })
+
+    return this.formatResponse(response)
   }
 
   // ===== MÉTODOS ADICIONALES =====
 
   /**
-   * Obtener estadísticas del dashboard - CORREGIDO para usar la ruta correcta
+   * Obtener estadísticas del dashboard
    * @param {Object} filtros - Filtros para las estadísticas
    * @returns {Promise<Object>} Estadísticas
    */
   async getStats(filtros = {}) {
-    const response = await apiClient.get('/solicitudes/estadisticas', {
-      params: cleanParams(filtros),
-    })
-    return response.data
+    const params = this.cleanParams(filtros)
+    const response = await this.client.get(`${this.baseUrl}/estadisticas`, { params })
+    return this.formatResponse(response)
   }
 
   /**
@@ -262,8 +200,8 @@ class SolicitudesService {
   async getHistory(id) {
     if (!id) throw new Error('ID de solicitud requerido')
 
-    const response = await apiClient.get(`/solicitudes/${id}/history`)
-    return response.data
+    const response = await this.client.get(`${this.baseUrl}/${id}/history`)
+    return this.formatResponse(response)
   }
 
   /**
@@ -274,8 +212,8 @@ class SolicitudesService {
   async getAprobaciones(id) {
     if (!id) throw new Error('ID de solicitud requerido')
 
-    const response = await apiClient.get(`/solicitudes/${id}/aprobaciones`)
-    return response.data
+    const response = await this.client.get(`${this.baseUrl}/${id}/aprobaciones`)
+    return this.formatResponse(response)
   }
 
   /**
@@ -285,18 +223,15 @@ class SolicitudesService {
    * @returns {Promise<boolean>} Éxito de la exportación
    */
   async export(filtros = {}, formato = 'excel') {
-    const response = await apiClient.get('/solicitudes/export', {
-      params: { ...cleanParams(filtros), formato },
-      responseType: 'blob',
-    })
-
+    const params = { ...this.cleanParams(filtros), formato }
+    
     // Generar nombre de archivo con fecha
     const fecha = new Date().toISOString().split('T')[0]
     const extension = formato === 'excel' ? 'xlsx' : 'pdf'
     const filename = `solicitudes_${fecha}.${extension}`
 
-    // Usar utilidad centralizada para descarga
-    downloadBlob(response.data, filename)
+    const url = `${this.baseUrl}/export`
+    await this.downloadFile(url + '?' + new URLSearchParams(params), filename)
 
     return true
   }
@@ -312,11 +247,9 @@ class SolicitudesService {
       throw new Error('IDs de solicitud y documento requeridos')
     }
 
-    const response = await apiClient.get(
-      `/solicitudes/${solicitudId}/documentos/${documentoId}`,
-      {
-        responseType: 'blob',
-      }
+    const response = await this.client.get(
+      `${this.baseUrl}/${solicitudId}/documentos/${documentoId}`,
+      { responseType: 'blob' }
     )
 
     // Extraer nombre del archivo del header
@@ -325,13 +258,21 @@ class SolicitudesService {
       ? contentDisposition.split('filename=')[1]?.replace(/"/g, '')
       : `documento_${documentoId}`
 
-    // Usar utilidad centralizada para descarga
-    downloadBlob(response.data, filename)
+    // Crear blob y descargar
+    const blob = new Blob([response.data])
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', filename)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
 
     return true
   }
 
-  // ===== MÉTODOS DE UTILIDAD =====
+  // ===== MÉTODOS DE VALIDACIÓN =====
 
   /**
    * Validar datos de solicitud antes de enviar
@@ -339,6 +280,8 @@ class SolicitudesService {
    * @returns {Object} Datos validados
    */
   validateSolicitudData(solicitudData) {
+    if (!solicitudData) throw new Error('Datos de solicitud requeridos')
+
     const required = ['tipo_requisicion', 'descripcion_detallada', 'urgencia']
     const missing = required.filter((field) => !solicitudData[field])
 
@@ -372,22 +315,11 @@ class SolicitudesService {
    */
   async healthCheck() {
     try {
-      const response = await apiClient.get('/solicitudes/health')
+      const response = await this.client.get(`${this.baseUrl}/health`)
       return response.status === 200
     } catch (error) {
       console.warn('Solicitudes health check failed:', error)
       return false
-    }
-  }
-
-  /**
-   * Obtener configuración del cliente (delegada a interceptors)
-   * @returns {Object} Configuración actual
-   */
-  getConfig() {
-    return {
-      baseURL: apiClient.defaults.baseURL,
-      timeout: apiClient.defaults.timeout,
     }
   }
 
@@ -426,12 +358,20 @@ class SolicitudesService {
     if (!rolesPermitidos.includes(usuario.rol)) return false
 
     // Si es solicitante, solo puede cancelar sus propias solicitudes
-    if (usuario.rol === 'solicitante' && solicitud.solicitante_id !== usuario.id_usuario) {
+    if (
+      usuario.rol === 'solicitante' &&
+      solicitud.solicitante_id !== usuario.id_usuario
+    ) {
       return false
     }
 
     // Verificar estado
-    const estadosCancelables = ['pendiente', 'en_revision', 'aprobada', 'en_proceso']
+    const estadosCancelables = [
+      'pendiente',
+      'en_revision',
+      'aprobada',
+      'en_proceso',
+    ]
     if (!estadosCancelables.includes(solicitud.estatus)) return false
 
     return true
@@ -445,7 +385,10 @@ class SolicitudesService {
    */
   canEdit(solicitud, usuario) {
     // Solo el solicitante puede editar (o admin)
-    if (usuario.rol === 'solicitante' && solicitud.solicitante_id !== usuario.id_usuario) {
+    if (
+      usuario.rol === 'solicitante' &&
+      solicitud.solicitante_id !== usuario.id_usuario
+    ) {
       return false
     }
 
@@ -455,6 +398,57 @@ class SolicitudesService {
     // Verificar estado
     const estadosEditables = ['pendiente', 'en_revision']
     return estadosEditables.includes(solicitud.estatus)
+  }
+
+  // ===== MÉTODOS ADICIONALES ÚTILES =====
+
+  /**
+   * Obtener configuración del cliente
+   * @returns {Object} Configuración actual
+   */
+  getConfig() {
+    return {
+      baseURL: this.client.defaults.baseURL,
+      timeout: this.client.defaults.timeout,
+    }
+  }
+
+  /**
+   * Buscar solicitudes (usa el método heredado de BaseService)
+   * @param {string} searchTerm - Término de búsqueda
+   * @param {Object} params - Parámetros adicionales
+   * @returns {Promise<Object>} Resultados de búsqueda
+   */
+  async search(searchTerm, params = {}) {
+    const response = await super.search(searchTerm, params)
+    
+    // Adaptar estructura para compatibilidad
+    return {
+      solicitudes: response.data?.data || response.data?.solicitudes || response.data || [],
+      pagination: response.data?.pagination || response.data?.meta || null,
+      total: response.data?.total || response.data?.count || 0,
+    }
+  }
+
+  /**
+   * Obtener solicitudes con filtros específicos del dominio
+   * @param {Object} filtros - Filtros específicos
+   * @returns {Promise<Object>} Solicitudes filtradas
+   */
+  async getSolicitudes(filtros = {}) {
+    return await this.getAll(filtros)
+  }
+
+  /**
+   * Contar solicitudes con filtros
+   * @param {Object} filtros - Filtros para el conteo
+   * @returns {Promise<number>} Número de solicitudes
+   */
+  async count(filtros = {}) {
+    const params = this.cleanParams(filtros)
+    const response = await this.client.get(`${this.baseUrl}/count`, { params })
+    const result = this.formatResponse(response)
+    return result.data?.count || result.data || 0
   }
 }
 

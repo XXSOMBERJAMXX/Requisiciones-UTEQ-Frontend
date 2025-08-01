@@ -11,7 +11,6 @@ const RequestItemsTable = ({ items, onAddItem, onRemoveItem, onItemChange, isRea
           <tr>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider rounded-tl-lg">Ítem</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">Cantidad</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">Unidad</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">Precio Est.</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">Justificación</th>
             {!isReadOnly && <th className="px-4 py-3 text-right text-xs font-medium text-gray-200 uppercase tracking-wider rounded-tr-lg">Acciones</th>}
@@ -25,9 +24,6 @@ const RequestItemsTable = ({ items, onAddItem, onRemoveItem, onItemChange, isRea
               </td>
               <td className="p-3 whitespace-nowrap">
                 {isReadOnly ? <p className="text-sm text-gray-300">{item.quantity}</p> : <Input type="number" value={item.quantity} onChange={(e) => onItemChange(index, 'quantity', e.target.value)} className="!my-0 !py-1 !px-2 text-sm w-20 bg-gray-700 text-white border-gray-600 focus:ring-blue-500" min="1" required={!isReadOnly} readOnly={isReadOnly} />}
-              </td>
-              <td className="p-3 whitespace-nowrap">
-                {isReadOnly ? <p className="text-sm text-gray-300">{item.unit}</p> : <Input type="text" value={item.unit} onChange={(e) => onItemChange(index, 'unit', e.target.value)} className="!my-0 !py-1 !px-2 text-sm w-20 bg-gray-700 text-white border-gray-600 focus:ring-blue-500" placeholder="Unidad" required={!isReadOnly} readOnly={isReadOnly} />}
               </td>
               <td className="p-3 whitespace-nowrap">
                 {isReadOnly ? <p className="text-sm text-gray-300">${item.price ? parseFloat(item.price).toFixed(2) : '0.00'}</p> : <Input type="number" value={item.price} onChange={(e) => onItemChange(index, 'price', e.target.value)} className="!my-0 !py-1 !px-2 text-sm w-24 bg-gray-700 text-white border-gray-600 focus:ring-blue-500" placeholder="0.00" step="0.01" min="0" readOnly={isReadOnly} />}

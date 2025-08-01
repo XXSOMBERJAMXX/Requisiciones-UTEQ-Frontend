@@ -1,9 +1,10 @@
-// DetalleSolicitud/SeccionesDetalle.jsx
-import React from 'react'
-import { FaFile, FaDownload } from 'react-icons/fa'
+// DetalleSolicitud/SeccionesDetalle.jsx (versión actualizada)
+import React, { useState, useEffect } from 'react'
+import { FaFile, FaDownload, FaEye, FaFilePdf, FaFileImage, FaFileAlt } from 'react-icons/fa'
 import Button from '../../../components/common/Button'
 import TablaItemsSolicitud from '../../../components/solicitudes/TablaItemsSolicitud'
-import { formatearFechaHora, obtenerColorEstado, obtenerColorUrgencia, formatearEstado, formatearTipoRequisicion, formatearUrgencia, formatearMoneda, formatearFecha } from './utils'
+import DocumentPreviewModal from '../../../components/solicitudes/DocumentPreviewModal' // Importar el modal
+import { formatearFechaHora, obtenerColorEstado, obtenerColorUrgencia, formatearEstado, formatearTipoRequisicion, formatearUrgencia, formatearFecha } from './utils'
 
 // Componente para mostrar el historial
 export const HistorialSolicitud = ({ aprobaciones, solicitud }) => (
@@ -78,53 +79,151 @@ export const HistorialSolicitud = ({ aprobaciones, solicitud }) => (
   </div>
 )
 
-// Componente para mostrar documentos
-export const SeccionDocumentos = ({ documentos }) => (
-  <div className="p-6 bg-slate-800 rounded-lg border border-slate-600">
-    <h3 className="text-xl font-semibold text-slate-100 mb-6">
-      Documentos Adjuntos
-    </h3>
-    {documentos && documentos.length > 0 ? (
-      <div className="space-y-4">
-        {documentos.map((doc, index) => (
-          <div
-            key={index}
-            className="flex items-center justify-between bg-slate-700 border border-slate-600 p-4 rounded-lg hover:bg-slate-600 transition-colors"
-          >
-            <div className="flex items-center space-x-4">
-              <FaFile className="w-6 h-6 text-blue-400 flex-shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-100 truncate">
-                  {doc.nombre_archivo}
-                </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  Subido el {formatearFecha(doc.fecha_subida)}
-                  {doc.usuario_subida && ` por ${doc.usuario_subida.nombre_completo}`}
-                </p>
+// Componente actualizado para mostrar documentos con vista previa
+export const SeccionDocumentos = ({ documentos }) => {
+  const [selectedDocument, setSelectedDocument] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Función para obtener el icono según la extensión del archivo
+  const getFileIcon = (filename) => {
+    const extension = filename.split('.').pop().toLowerCase();
+    
+    switch (extension) {
+      case 'pdf':
+        return <FaFilePdf className="w-6 h-6 text-red-400 flex-shrink-0" />;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'bmp':
+      case 'webp':
+        return <FaFileImage className="w-6 h-6 text-green-400 flex-shrink-0" />;
+      case 'txt':
+      case 'csv':
+        return <FaFileAlt className="w-6 h-6 text-blue-400 flex-shrink-0" />;
+      default:
+        return <FaFile className="w-6 h-6 text-gray-400 flex-shrink-0" />;
+    }
+  };
+
+  // Función para abrir la vista previa
+  const handlePreview = (documento) => {
+    setSelectedDocument(documento);
+    setIsModalOpen(true);
+  };
+
+  // Función para cerrar el modal
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedDocument(null);
+  };
+
+  // Función para descargar directamente
+  const handleDirectDownload = (documento) => {
+    const API_BASE_URL = 'http://localhost:3000';
+    const fileUrl = `${API_BASE_URL}/${documento.ruta_archivo || documento.nombre_archivo}`;
+    
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.download = documento.nombre_archivo;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Cerrar modal con ESC
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && isModalOpen) {
+        handleCloseModal();
+      }
+    };
+
+    if (isModalOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      // Prevenir scroll del body cuando el modal está abierto
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isModalOpen]);
+
+  return (
+    <>
+      <div className="p-6 bg-slate-800 rounded-lg border border-slate-600">
+        <h3 className="text-xl font-semibold text-slate-100 mb-6">
+          Documentos Adjuntos
+        </h3>
+        {documentos && documentos.length > 0 ? (
+          <div className="space-y-4">
+            {documentos.map((doc, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between bg-slate-700 border border-slate-600 p-4 rounded-lg hover:bg-slate-600 transition-colors group"
+              >
+                <div className="flex items-center space-x-4 min-w-0 flex-1">
+                  {getFileIcon(doc.nombre_archivo)}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-100 truncate">
+                      {doc.nombre_archivo}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Subido el {formatearFecha(doc.fecha_subida)}
+                      {doc.usuario_subida && ` por ${doc.usuario_subida.nombre_completo}`}
+                    </p>
+                    {doc.tamaño && (
+                      <p className="text-xs text-slate-500">
+                        Tamaño: {doc.tamaño}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-2 flex-shrink-0">
+                  {/* Botón de vista previa */}
+                  <Button
+                    variant="secondary"
+                    onClick={() => handlePreview(doc)}
+                    className="p-2 opacity-70 group-hover:opacity-100 transition-opacity"
+                    title="Vista previa"
+                  >
+                    <FaEye className="w-4 h-4" />
+                  </Button>
+                  
+                  {/* Botón de descarga directa */}
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleDirectDownload(doc)}
+                    className="p-2 opacity-70 group-hover:opacity-100 transition-opacity"
+                    title="Descargar archivo"
+                  >
+                    <FaDownload className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                // Aquí implementarías la descarga del archivo
-                alert(`Descargando ${doc.nombre_archivo}`)
-              }}
-              className="p-2 flex-shrink-0"
-              title="Descargar archivo"
-            >
-              <FaDownload className="w-4 h-4" />
-            </Button>
+            ))}
           </div>
-        ))}
+        ) : (
+          <div className="text-center py-12">
+            <FaFile className="w-12 h-12 text-slate-500 mx-auto mb-4" />
+            <p className="text-slate-400">No hay documentos adjuntos</p>
+          </div>
+        )}
       </div>
-    ) : (
-      <div className="text-center py-12">
-        <FaFile className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-        <p className="text-slate-400">No hay documentos adjuntos</p>
-      </div>
-    )}
-  </div>
-)
+
+      {/* Modal de vista previa */}
+      <DocumentPreviewModal
+        documento={selectedDocument}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
+    </>
+  );
+};
 
 // Componente para mostrar los ítems de la solicitud
 export const SeccionItems = ({ items }) => (

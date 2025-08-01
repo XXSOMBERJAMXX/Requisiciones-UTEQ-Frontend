@@ -22,9 +22,6 @@ const TablaItemsSolicitud = ({
             Cantidad
           </th>
           <th className="px-4 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">
-            Unidad
-          </th>
-          <th className="px-4 py-3 text-left text-xs font-medium text-gray-200 uppercase tracking-wider">
             Precio Est.
           </th>
           {readonly && (
@@ -36,7 +33,7 @@ const TablaItemsSolicitud = ({
             Justificación
           </th>
           {!readonly && (
-            <th className="px-4 py-3 text-right text-xs font-medium text-gray-200 uppercase tracking-wider rounded-tr-lg">
+            <th className="px-4 py-3 text-center text-xs font-medium text-gray-200 uppercase tracking-wider rounded-tr-lg">
               Acciones
             </th>
           )}
@@ -69,20 +66,6 @@ const TablaItemsSolicitud = ({
                   onChange={(e) => onCambiarItem(index, 'cantidad', e.target.value)}
                   className="!my-0 !py-1 !px-2 text-sm w-20 bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
                   min="1"
-                  required
-                />
-              )}
-            </td>
-            <td className="p-3 whitespace-nowrap">
-              {readonly ? (
-                <span className="text-sm text-gray-300">{item.unidad}</span>
-              ) : (
-                <Input
-                  type="text"
-                  value={item.unidad}
-                  onChange={(e) => onCambiarItem(index, 'unidad', e.target.value)}
-                  className="!my-0 !py-1 !px-2 text-sm w-20 bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
-                  placeholder="Unidad"
                   required
                 />
               )}
@@ -125,7 +108,7 @@ const TablaItemsSolicitud = ({
               )}
             </td>
             {!readonly && (
-              <td className="p-3 whitespace-nowrap text-right">
+              <td className="p-3 whitespace-nowrap">
                 <Button
                   type="button"
                   onClick={() => onEliminarItem(index)}

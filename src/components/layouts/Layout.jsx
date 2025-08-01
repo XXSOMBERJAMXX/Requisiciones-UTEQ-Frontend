@@ -39,12 +39,9 @@ const Layout = () => {
             isMobile={true} 
           />
         </div>
-
-        {/* Contenido de la página renderizado por Outlet - CON SU PROPIO SCROLL */}
-        <main className="flex-1 overflow-auto bg-slate-900 p-4 sm:p-6 lg:p-8">
-          <div className="max-w-full mx-auto">
-            <Outlet />
-          </div>
+        
+        <main className="flex-1 overflow-auto bg-slate-900 w-full min-w-0 p-4 lg:p-8 md:p-6 sm:p-4">
+          <Outlet />
         </main>
       </div>
     </div>

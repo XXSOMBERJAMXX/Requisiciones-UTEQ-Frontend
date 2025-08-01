@@ -10,7 +10,7 @@ import {
   FaBuilding,
   FaDollarSign,
 } from 'react-icons/fa'
-import solicitudesService from '../../../services/requestService'
+import solicitudesService from '../../../services/solicitudesService'
 import { useAuth } from '../../../hooks/useAuth'
 import SolicitudesLayout from '../../../components/layouts/SolicitudesLayout'
 import Button from '../../../components/common/Button'
@@ -23,7 +23,6 @@ import {
   formatearUrgencia, 
   formatearMoneda, 
   formatearFecha,
-  formatearFechaHora,
   verificarPermisos 
 } from './utils'
 
@@ -308,7 +307,7 @@ const DetalleSolicitud = () => {
             />
           )}
           {pestanaActiva === 'documentos' && (
-            <SeccionDocumentos documentos={solicitud.documentos} />
+            <SeccionDocumentos documentos={solicitud.archivos_adjuntos} />
           )}
         </div>
 
