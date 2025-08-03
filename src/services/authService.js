@@ -1,6 +1,5 @@
 // ===== ARCHIVO: src/services/authService.js - VERSIÓN SIMPLE =====
 import BaseService from './api/BaseService'
-import { API_CONFIG } from './api/config'
 
 class AuthService extends BaseService {
   constructor() {

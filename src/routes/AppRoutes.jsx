@@ -1,11 +1,10 @@
-// ===== ARCHIVO: src/routes/AppRoutes.jsx =====
 import { Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { routesConfig, generatePageTitle } from '../config/routes'
 import ProtectedRoute from '../components/ProtectedRoute'
 import Layout from '../components/layouts/Layout'
 
-// Componente de loading para lazy loading
+// Componente de loading
 const RouteLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-950">
     <div className="flex flex-col items-center space-y-4">
@@ -20,13 +19,18 @@ const usePageTitle = () => {
   const location = useLocation()
 
   useEffect(() => {
-    const currentRoute = [
+    const allRoutes = [
       ...routesConfig.public,
       ...routesConfig.protected,
-    ].find((route) => {
-      // Manejar rutas con parámetros
+      ...routesConfig.reportes.routes.map(route => ({
+        ...route,
+        path: `reportes/${route.path}`.replace(/\/$/, '')
+      }))
+    ]
+
+    const currentRoute = allRoutes.find(route => {
       const routePattern = route.path.replace(/:\w+/g, '[^/]+')
-      const regex = new RegExp(`^${routePattern}$`)
+      const regex = new RegExp(`^/${routePattern}$`)
       return regex.test(location.pathname)
     })
 
@@ -38,15 +42,13 @@ const usePageTitle = () => {
   }, [location])
 }
 
-// Componente principal de rutas
 const AppRoutes = () => {
-  // Actualizar título de página automáticamente
   usePageTitle()
 
   return (
     <Routes>
-      {/* Rutas públicas (sin layout ni protección) */}
-      {routesConfig.public.map((route) => {
+      {/* Solo la ruta de login está fuera del layout */}
+      {routesConfig.public.map(route => {
         const Component = route.element
         return (
           <Route
@@ -61,7 +63,7 @@ const AppRoutes = () => {
         )
       })}
 
-      {/* Rutas protegidas (con layout y autenticación) */}
+      {/* Todas las rutas protegidas dentro del layout principal */}
       <Route
         path="/*"
         element={
@@ -70,13 +72,14 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       >
-        {routesConfig.protected.map((route) => {
+        {/* Sub-rutas protegidas generales */}
+        {routesConfig.protected.map(route => {
           const Component = route.element
           return (
             <Route
-              key={route.path || 'index'} // ✅ Key mejorado para ruta vacía
-              path={route.path || undefined} // ✅ undefined para ruta index
-              index={route.path === ''} // ✅ Marcar como index si path está vacío
+              key={route.path || 'index'}
+              path={route.path || undefined}
+              index={route.path === ''}
               element={
                 <Suspense fallback={<RouteLoader />}>
                   <Component />
@@ -85,9 +88,35 @@ const AppRoutes = () => {
             />
           )
         })}
+
+        {/* Sub-rutas de reportes con layout anidado */}
+        <Route
+          path="reportes/*"
+          element={
+            <Suspense fallback={<RouteLoader />}>
+              <routesConfig.reportes.layout />
+            </Suspense>
+          }
+        >
+          {routesConfig.reportes.routes.map(route => {
+            const Component = route.element
+            return (
+              <Route
+                key={route.path || 'index'}
+                path={route.path || undefined}
+                index={route.path === ''}
+                element={
+                  <Suspense fallback={<RouteLoader />}>
+                    <Component />
+                  </Suspense>
+                }
+              />
+            )
+          })}
+        </Route>
       </Route>
 
-      {/* Ruta comodín para 404s */}
+      {/* Ruta comodín */}
       <Route
         path="*"
         element={<Navigate to={routesConfig.redirects.notFound} replace />}
