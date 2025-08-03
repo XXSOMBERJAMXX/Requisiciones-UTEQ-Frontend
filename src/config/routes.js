@@ -17,8 +17,16 @@ const EditarSolicitud = lazy(() => import('../pages/solicitudes/EditarSolicitud'
 const Compras = lazy(() => import('../pages/compras/Compras'))
 const GestionarCompras = lazy(() => import('../pages/compras/GestionarCompras'))
 
+// Layout específico para reportes
+const ReportesLayout = lazy(() => import('../components/layouts/ReportesLayout'))
+
+// Páginas de reportes (SIN el layout, ya que será manejado por ReportesLayout)
+const ReportesDashboard = lazy(() => import('../pages/reportes'))
+const ComprasReports = lazy(() => import('../pages/reportes/ComprasReports'))
+const SolicitudesReports = lazy(() => import('../pages/reportes/SolicitudesReports'))
+const ExportCenter = lazy(() => import('../pages/reportes/ExportCenter'))
+
 // Otras páginas
-const Reportes = lazy(() => import('../pages/Reportes'))
 const Usuarios = lazy(() => import('../pages/Usuarios'))
 
 // ===== CONFIGURACIÓN DE RUTAS =====
@@ -35,7 +43,7 @@ export const routesConfig = {
   // Rutas protegidas (requieren autenticación)
   protected: [
     {
-      path: '',  // ✅ Cambiado de '/' a '' para la ruta index
+      path: '',
       element: Dashboard,
       title: 'Dashboard',
       exact: true
@@ -43,25 +51,25 @@ export const routesConfig = {
     
     // Módulo de Solicitudes
     {
-      path: 'solicitudes',  // ✅ Sin '/' al inicio
+      path: 'solicitudes',
       element: ListaSolicitudes,
       title: 'Solicitudes',
       module: 'solicitudes'
     },
     {
-      path: 'solicitudes/crear',  // ✅ Sin '/' al inicio
+      path: 'solicitudes/crear',
       element: CrearSolicitud,
       title: 'Crear Solicitud',
       module: 'solicitudes'
     },
     {
-      path: 'solicitudes/:id',  // ✅ Sin '/' al inicio
+      path: 'solicitudes/:id',
       element: DetalleSolicitud,
       title: 'Detalle de Solicitud',
       module: 'solicitudes'
     },
     {
-      path: 'solicitudes/:id/editar',  // ✅ Sin '/' al inicio
+      path: 'solicitudes/:id/editar',
       element: EditarSolicitud,
       title: 'Editar Solicitud',
       module: 'solicitudes'
@@ -69,19 +77,19 @@ export const routesConfig = {
 
     // Módulo de Compras
     {
-      path: 'compras',  // ✅ Sin '/' al inicio
+      path: 'compras',
       element: Compras,
       title: 'Compras',
       module: 'compras'
     },
     {
-      path: 'compras/crear',  // ✅ Sin '/' al inicio
+      path: 'compras/crear',
       element: GestionarCompras,
       title: 'Crear Compra',
       module: 'compras'
     },
     {
-      path: 'compras/editar/:id',  // ✅ Sin '/' al inicio
+      path: 'compras/editar/:id',
       element: GestionarCompras,
       title: 'Editar Compra',
       module: 'compras'
@@ -89,25 +97,47 @@ export const routesConfig = {
 
     // Otros módulos
     {
-      path: 'reportes',  // ✅ Sin '/' al inicio
-      element: Reportes,
-      title: 'Reportes',
-      module: 'reportes'
-    },
-    {
-      path: 'usuarios',  // ✅ Sin '/' al inicio
+      path: 'usuarios',
       element: Usuarios,
       title: 'Usuarios',
       module: 'usuarios'
     }
   ],
 
+  // ✅ NUEVA SECCIÓN: Módulo de reportes con su propio layout
+  reportes: {
+    layout: ReportesLayout,
+    routes: [
+      {
+        path: '',  // /reportes (ruta index)
+        element: ReportesDashboard,
+        title: 'Dashboard de Reportes',
+        exact: true
+      },
+      {
+        path: 'compras',  // /reportes/compras
+        element: ComprasReports,
+        title: 'Reportes de Compras'
+      },
+      {
+        path: 'solicitudes',  // /reportes/solicitudes
+        element: SolicitudesReports,
+        title: 'Reportes de Solicitudes'
+      },
+      {
+        path: 'exportar',  // /reportes/exportar
+        element: ExportCenter,
+        title: 'Exportar Reportes'
+      }
+    ]
+  },
+
   // Configuración de redirecciones
   redirects: {
-    notFound: '/login',      // Ruta para 404s
-    unauthorized: '/login',  // Ruta para usuarios no autenticados
-    afterLogin: '/',         // Ruta después del login exitoso
-    afterLogout: '/login'    // Ruta después del logout
+    notFound: '/login',
+    unauthorized: '/login',
+    afterLogin: '/',
+    afterLogout: '/login'
   },
 
   // Configuración de títulos
@@ -118,7 +148,7 @@ export const routesConfig = {
   }
 }
 
-// ===== UTILIDADES =====
+// ===== UTILIDADES ACTUALIZADAS =====
 
 /**
  * Obtener todas las rutas de un tipo específico
@@ -131,6 +161,9 @@ export const getRoutesByType = (type) => {
  * Obtener rutas por módulo
  */
 export const getRoutesByModule = (module) => {
+  if (module === 'reportes') {
+    return routesConfig.reportes.routes
+  }
   return routesConfig.protected.filter(route => route.module === module)
 }
 
@@ -138,7 +171,11 @@ export const getRoutesByModule = (module) => {
  * Buscar una ruta por path
  */
 export const findRouteByPath = (path) => {
-  const allRoutes = [...routesConfig.public, ...routesConfig.protected]
+  const allRoutes = [
+    ...routesConfig.public, 
+    ...routesConfig.protected,
+    ...routesConfig.reportes.routes
+  ]
   return allRoutes.find(route => route.path === path)
 }
 
@@ -153,10 +190,14 @@ export const generatePageTitle = (routeTitle) => {
   return `${routeTitle}${separator}${suffix}`
 }
 
-// ===== METADATOS DE RUTAS =====
+// ===== METADATOS DE RUTAS ACTUALIZADOS =====
 export const routeMetadata = {
-  totalRoutes: routesConfig.public.length + routesConfig.protected.length,
-  modules: [...new Set(routesConfig.protected.map(route => route.module).filter(Boolean))],
+  totalRoutes: routesConfig.public.length + routesConfig.protected.length + routesConfig.reportes.routes.length,
+  modules: [
+    ...new Set(routesConfig.protected.map(route => route.module).filter(Boolean)),
+    'reportes'
+  ],
   publicRoutes: routesConfig.public.length,
-  protectedRoutes: routesConfig.protected.length
+  protectedRoutes: routesConfig.protected.length,
+  reportesRoutes: routesConfig.reportes.routes.length
 }
