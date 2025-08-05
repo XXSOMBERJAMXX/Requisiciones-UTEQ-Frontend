@@ -28,6 +28,10 @@ const ExportCenter = lazy(() => import('../pages/reportes/ExportCenter'))
 
 // Otras páginas
 const Usuarios = lazy(() => import('../pages/Usuarios'))
+// Añadir estas importaciones
+const ListaUsuarios = lazy(() => import('../pages/usuarios/ListaUsuarios'));
+const CrearUsuario = lazy(() => import('../pages/usuarios/UsuarioForm'));
+const EditarUsuario = lazy(() => import('../pages/usuarios/UsuarioForm'));
 
 // ===== CONFIGURACIÓN DE RUTAS =====
 export const routesConfig = {
@@ -98,10 +102,30 @@ export const routesConfig = {
     // Otros módulos
     {
       path: 'usuarios',
-      element: Usuarios,
+      element: ListaUsuarios,
       title: 'Usuarios',
       module: 'usuarios'
-    }
+    },
+
+    // Módulo de Usuarios
+    {
+      path: 'usuarios',
+      element: ListaUsuarios,
+      title: 'Usuarios',
+      module: 'usuarios'
+    },
+    {
+      path: 'usuarios/crear',
+      element: CrearUsuario,
+      title: 'Crear Usuario',
+      module: 'usuarios'
+    },
+    {
+      path: 'usuarios/:id/editar',
+      element: EditarUsuario,
+      title: 'Editar Usuario',
+      module: 'usuarios'
+    },
   ],
 
   // ✅ NUEVA SECCIÓN: Módulo de reportes con su propio layout
