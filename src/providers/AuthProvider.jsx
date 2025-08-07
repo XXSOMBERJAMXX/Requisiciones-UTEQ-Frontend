@@ -14,43 +14,43 @@ export const AuthProvider = ({ children }) => {
     const storedUser = authService.getStoredUser()
 
     // Debug logging
-    console.log('🔍 Verificando sesión:', {
-      hasToken: !!token,
-      hasUser: !!storedUser,
-      userRole: storedUser?.rol,
-      tokenExpired: token ? authService.isTokenExpired() : 'no-token',
-    })
+    // console.log('🔍 Verificando sesión:', {
+    //   hasToken: !!token,
+    //   hasUser: !!storedUser,
+    //   userRole: storedUser?.rol,
+    //   tokenExpired: token ? authService.isTokenExpired() : 'no-token',
+    // })
 
     if (!token || !storedUser) {
-      console.log('❌ No hay token o usuario guardado')
+      // console.log('❌ No hay token o usuario guardado')
       return false
     }
 
     if (authService.isTokenExpired()) {
-      console.log('❌ Token expirado')
+      // console.log('❌ Token expirado')
       authService.clearAuthData()
       return false
     }
 
-    console.log('✅ Sesión válida')
+    // console.log('✅ Sesión válida')
     return true
   }, [])
 
   // Inicializar autenticación al cargar la app
   useEffect(() => {
     const initAuth = () => {
-      console.log('🚀 Inicializando autenticación...')
+      // console.log('🚀 Inicializando autenticación...')
 
       try {
         if (isSessionValid()) {
           const userData = authService.getStoredUser()
-          console.log(
-            '✅ Restaurando usuario desde localStorage:',
-            userData?.nombre
-          )
+          // console.log(
+          //   '✅ Restaurando usuario desde localStorage:',
+          //   userData?.nombre
+          // )
           setUser(userData)
         } else {
-          console.log('❌ No hay sesión válida')
+          // console.log('❌ No hay sesión válida')
           setUser(null)
         }
       } catch (error) {
@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }) => {
         setUser(null)
       } finally {
         setLoading(false)
-        console.log('✅ Inicialización completada')
+        // console.log('✅ Inicialización completada')
       }
     }
 
@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }) => {
   // Escuchar eventos de logout desde interceptores
   useEffect(() => {
     const handleUnauthorized = () => {
-      console.log('🔑 Evento unauthorized recibido - cerrando sesión')
+      // console.log('🔑 Evento unauthorized recibido - cerrando sesión')
       authService.clearAuthData()
       setUser(null)
       setError('Sesión expirada')
@@ -88,11 +88,11 @@ export const AuthProvider = ({ children }) => {
       setLoading(true)
       setError(null)
 
-      console.log('🔐 Intentando login...')
+      // console.log('🔐 Intentando login...')
       const response = await authService.login(correo_institucional, password)
 
       setUser(response.data.usuario)
-      console.log('✅ Login exitoso:', response.data.usuario?.nombre)
+      // console.log('✅ Login exitoso:', response.data.usuario?.nombre)
 
       return response
     } catch (error) {
@@ -107,7 +107,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       setLoading(true)
-      console.log('🚪 Cerrando sesión...')
+      // console.log('🚪 Cerrando sesión...')
 
       await authService.logout()
     } catch (error) {
@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null)
       setError(null)
       setLoading(false)
-      console.log('✅ Logout completado')
+      // console.log('✅ Logout completado')
     }
   }
 
@@ -143,14 +143,14 @@ export const AuthProvider = ({ children }) => {
   const isAuthenticated = !!user && isSessionValid()
 
   // Debug: Log del estado actual
-  useEffect(() => {
-    console.log('📊 Estado de autenticación:', {
-      hasUser: !!user,
-      userName: user?.nombre,
-      isAuthenticated,
-      loading,
-    })
-  }, [user, isAuthenticated, loading])
+  // useEffect(() => {
+  //   console.log('📊 Estado de autenticación:', {
+  //     hasUser: !!user,
+  //     userName: user?.nombre,
+  //     isAuthenticated,
+  //     loading,
+  //   })
+  // }, [user, isAuthenticated, loading])
 
   const value = {
     user,

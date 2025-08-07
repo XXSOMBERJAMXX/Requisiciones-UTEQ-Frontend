@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   useComprasPorPeriodo,
   useComprasPorDepartamentos,
@@ -22,16 +22,193 @@ const ComprasReports = () => {
     periodo: 'mensual',
   })
 
-  const comprasPeriodo = useComprasPorPeriodo(filters)
-  const comprasDepartamentos = useComprasPorDepartamentos(filters)
+  const handleFiltersChange = (newFilters) => {
+    setFilters(newFilters)
+  }
+
+  // Hooks para obtener datos
+  const comprasPeriodo = useComprasPorPeriodo(filters, {
+    autoFetch: !!(filters.fecha_inicio && filters.fecha_fin),
+  })
+  const comprasDepartamentos = useComprasPorDepartamentos(filters, {
+    autoFetch: !!(filters.fecha_inicio && filters.fecha_fin),
+  })
   const filtrosConfig = useFiltrosConfigurables()
-  const { exportarReporte, exporting, exportSuccess, exportError } =
-    useExportacion()
+  const { exportarReporte, exporting, exportSuccess, exportError } = useExportacion()
 
-  const currentData =
-    activeTab === 'periodo' ? comprasPeriodo : comprasDepartamentos
+  // Refrescar datos cuando cambien filtros críticos
+  useEffect(() => {
+    if (filters.fecha_inicio && filters.fecha_fin) {
+      if (activeTab === 'periodo') {
+        comprasPeriodo.refetch()
+      } else {
+        comprasDepartamentos.refetch()
+      }
+    }
+  }, [filters.estatus, filters.departamento_id, filters.proveedor_id, activeTab])
+
+  const currentData = activeTab === 'periodo' ? comprasPeriodo : comprasDepartamentos
   const loading = currentData.loading || filtrosConfig.loading
+  
+  // Configuración de filtros con fallback
+  const filtrosConfigEstaticos = useMemo(() => {
+    if (!filtrosConfig.data) {
+      return {
+        departamentos: [],
+        proveedores: [],
+        usuarios: [],
+        opciones_estatus: {
+          compras: ['ordenada', 'en_transito', 'entregada', 'cancelada'],
+          solicitudes: ['pendiente', 'en_revision', 'aprobada', 'denegada']
+        },
+        opciones_urgencia: ['baja', 'media', 'alta', 'critica'],
+        opciones_tipo_requisicion: ['productos', 'servicios', 'mantenimiento'],
+        opciones_periodo: ['hoy', 'semana', 'mes', 'trimestre', 'año'],
+        opciones_criterio_ranking: ['volumen', 'frecuencia', 'calificacion'],
+        formatos_exportacion: ['pdf', 'xlsx', 'csv']
+      }
+    }
+    return filtrosConfig.data
+  }, [filtrosConfig.data])
 
+  // Filtrar datos por estatus si es necesario
+  const getDatosFiltrados = () => {
+    if (!currentData.data) return null
+
+    let compras = currentData.data.compras || []
+    
+    if (filters.estatus && filters.estatus !== 'todos') {
+      compras = compras.filter(compra => compra.estatus === filters.estatus)
+    }
+
+    return {
+      ...currentData.data,
+      compras
+    }
+  }
+
+  const datosFiltrados = getDatosFiltrados()
+
+  // Generar resumen estandarizado
+  const getResumenEstandarizado = () => {
+    if (!datosFiltrados) return null
+
+    if (activeTab === 'periodo') {
+      const compras = datosFiltrados.compras || []
+      const totalCompras = compras.reduce((sum, c) => sum + c.monto_total, 0)
+      const cantidadCompras = compras.length
+      const promedioCompra = cantidadCompras > 0 ? totalCompras / cantidadCompras : 0
+
+      return {
+        gasto_total: totalCompras,
+        numero_compras: cantidadCompras,
+        promedio_compra: promedioCompra,
+        variacion_periodo: 0,
+      }
+    } else {
+      const resumenGeneral = datosFiltrados.resumen_general || {}
+      return {
+        gasto_total: resumenGeneral.monto_total_global || 0,
+        numero_compras: resumenGeneral.cantidad_total_compras || 0,
+        promedio_compra: 
+          resumenGeneral.cantidad_total_compras > 0 
+            ? resumenGeneral.monto_total_global / resumenGeneral.cantidad_total_compras 
+            : 0,
+        departamentos_activos: datosFiltrados.total_departamentos || 0,
+      }
+    }
+  }
+
+  // Generar datos para gráficos
+  const getChartData = () => {
+    if (!datosFiltrados) return null
+
+    if (activeTab === 'periodo') {
+      // Para datos filtrados por estatus, recalcular tendencia
+      if (filters.estatus && filters.estatus !== 'todos') {
+        const comprasFiltradas = datosFiltrados.compras || []
+        const tendenciaPorPeriodo = {}
+        
+        comprasFiltradas.forEach(compra => {
+          const fecha = new Date(compra.fecha_compra)
+          const periodo = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`
+          
+          if (!tendenciaPorPeriodo[periodo]) {
+            tendenciaPorPeriodo[periodo] = {
+              periodo,
+              cantidad_compras: 0,
+              monto_total: 0
+            }
+          }
+          
+          tendenciaPorPeriodo[periodo].cantidad_compras++
+          tendenciaPorPeriodo[periodo].monto_total += compra.monto_total
+        })
+
+        const tendenciaArray = Object.values(tendenciaPorPeriodo).map(t => ({
+          ...t,
+          promedio_compra: t.cantidad_compras > 0 ? t.monto_total / t.cantidad_compras : 0
+        }))
+
+        return tendenciaArray.length > 0 ? tendenciaArray : datosFiltrados.tendencia_periodo
+      }
+      
+      return datosFiltrados.tendencia_periodo
+    } else {
+      // Para departamentos, crear datos de gráfico de barras
+      return datosFiltrados.compras_por_departamento?.slice(0, 10).map(dept => ({
+        periodo: dept.departamento,
+        monto_total: dept.monto_total,
+        cantidad_compras: dept.cantidad_compras
+      }))
+    }
+  }
+
+  // Generar configuración dinámica de estatus desde backend
+  const getStatusConfig = useMemo(() => {
+    const statusesFromBackend = filtrosConfigEstaticos?.opciones_estatus?.compras || []
+    
+    const statusConfig = {}
+    const statusLabels = {}
+    
+    statusesFromBackend.forEach(status => {
+      switch (status) {
+        case 'entregada':
+        case 'completada':
+          statusConfig[status] = 'bg-green-800 text-green-100'
+          statusLabels[status] = 'Entregada'
+          break
+        case 'en_transito':
+        case 'en_proceso':
+          statusConfig[status] = 'bg-yellow-700 text-yellow-100'
+          statusLabels[status] = 'En Tránsito'
+          break
+        case 'ordenada':
+        case 'pendiente':
+        case 'en_revision':
+          statusConfig[status] = 'bg-blue-800 text-blue-100'
+          statusLabels[status] = status === 'ordenada' ? 'Ordenada' : 
+                                status === 'pendiente' ? 'Pendiente' : 'En Revisión'
+          break
+        case 'cancelada':
+        case 'denegada':
+          statusConfig[status] = 'bg-red-800 text-red-100'
+          statusLabels[status] = status === 'cancelada' ? 'Cancelada' : 'Denegada'
+          break
+        case 'aprobada':
+          statusConfig[status] = 'bg-emerald-800 text-emerald-100'
+          statusLabels[status] = 'Aprobada'
+          break
+        default:
+          statusConfig[status] = 'bg-slate-700 text-slate-100'
+          statusLabels[status] = status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')
+      }
+    })
+
+    return { statusConfig, statusLabels }
+  }, [filtrosConfigEstaticos?.opciones_estatus?.compras])
+
+  // Configuración de columnas para período
   const columnasPeriodo = [
     {
       key: 'numero_orden',
@@ -54,28 +231,31 @@ const ComprasReports = () => {
     {
       key: 'estatus',
       label: 'Estatus',
-      render: (value) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-medium ${
-            value === 'entregada'
-              ? 'bg-green-800 text-green-100'
-              : value === 'en_transito'
-              ? 'bg-yellow-700 text-yellow-100'
-              : value === 'ordenada'
-              ? 'bg-blue-800 text-blue-100'
-              : 'bg-slate-700 text-slate-100'
-          }`}
-        >
-          {value || 'N/A'}
-        </span>
-      ),
+      render: (value) => {
+        const { statusConfig, statusLabels } = getStatusConfig
+
+        return (
+          <span
+            className={`px-2 py-1 rounded-full text-xs font-medium ${
+              statusConfig[value] || 'bg-slate-700 text-slate-100'
+            }`}
+          >
+            {statusLabels[value] || value || 'N/A'}
+          </span>
+        )
+      },
     },
   ]
 
+  // Configuración de columnas para departamentos
   const columnasDepartamentos = [
     { key: 'departamento', label: 'Departamento' },
     { key: 'codigo', label: 'Código' },
-    { key: 'cantidad_compras', label: 'Cantidad Compras' },
+    { 
+      key: 'cantidad_compras', 
+      label: 'Cantidad Compras',
+      render: (value) => parseInt(value || 0).toLocaleString()
+    },
     {
       key: 'monto_total',
       label: 'Monto Total',
@@ -86,13 +266,22 @@ const ComprasReports = () => {
       label: 'Promedio por Compra',
       render: (value) => `$${(value || 0).toLocaleString()}`,
     },
+    {
+      key: 'porcentaje_total',
+      label: '% del Total',
+      render: (value, row) => {
+        const resumenGeneral = currentData.data?.resumen_general
+        if (!resumenGeneral?.monto_total_global) return '0%'
+        const porcentaje = (row.monto_total / resumenGeneral.monto_total_global * 100).toFixed(1)
+        return `${porcentaje}%`
+      }
+    }
   ]
 
   const handleExport = async (formato) => {
     try {
       await exportarReporte({
-        tipo_reporte:
-          activeTab === 'periodo' ? 'compras_periodo' : 'compras_departamentos',
+        tipo_reporte: activeTab === 'periodo' ? 'compras_periodo' : 'compras_departamentos',
         formato,
         parametros: filters,
         incluir_graficos: formato === 'pdf',
@@ -106,6 +295,9 @@ const ComprasReports = () => {
     { id: 'periodo', label: 'Por Período', icon: '📅' },
     { id: 'departamentos', label: 'Por Departamentos', icon: '🏢' },
   ]
+
+  const resumenEstandarizado = getResumenEstandarizado()
+  const chartData = getChartData()
 
   return (
     <div className="space-y-8">
@@ -140,16 +332,12 @@ const ComprasReports = () => {
       {/* Panel de filtros */}
       <FiltersPanel
         filters={filters}
-        onChange={setFilters}
-        availableFilters={[
-          'dateRange',
-          'department',
-          'provider',
-          'status',
-          'period',
-        ]}
-        filtrosConfig={filtrosConfig.data}
+        onChange={handleFiltersChange}
+        availableFilters={['dateRange', 'department', 'status', 'period']}
+        filtrosConfig={filtrosConfigEstaticos}
         loading={filtrosConfig.loading}
+        statusOptions={filtrosConfigEstaticos?.opciones_estatus?.compras || []}
+        departmentOptions={filtrosConfigEstaticos?.departamentos || []}
       />
 
       {/* Estado de carga */}
@@ -177,27 +365,35 @@ const ComprasReports = () => {
       )}
 
       {/* Contenido principal */}
-      {!loading && !currentData.error && currentData.data && (
+      {!loading && !currentData.error && datosFiltrados && (
         <>
           {/* Tarjetas de resumen */}
-          <SummaryCards
-            data={
-              currentData.data.resumen || currentData.data.resumen_general
-            }
-            type="compras"
-          />
+          {resumenEstandarizado && (
+            <SummaryCards
+              data={resumenEstandarizado}
+              type="compras"
+              activeTab={activeTab}
+            />
+          )}
 
-          {/* Gráfico de tendencia (solo para período) */}
-          {activeTab === 'periodo' && currentData.data.tendencia_periodo && (
+          {/* Gráfico */}
+          {chartData && chartData.length > 0 && (
             <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
               <h3 className="text-lg font-semibold mb-4 text-slate-100">
-                Tendencia por Período
+                {activeTab === 'periodo' 
+                  ? 'Tendencia por Período' 
+                  : 'Distribución por Departamento (Top 10)'
+                }
               </h3>
               <TrendChart
-                data={currentData.data.tendencia_periodo}
+                data={chartData}
                 xKey="periodo"
                 yKey="monto_total"
-                title="Evolución del Gasto"
+                title={activeTab === 'periodo' 
+                  ? 'Evolución del Gasto' 
+                  : 'Gasto por Departamento'
+                }
+                chartType={activeTab === 'periodo' ? 'line' : 'bar'}
               />
             </div>
           )}
@@ -216,24 +412,25 @@ const ComprasReports = () => {
               {activeTab === 'periodo'
                 ? 'Compras Detalladas'
                 : 'Compras por Departamento'}
+              {filters.estatus && filters.estatus !== 'todos' && (
+                <span className="text-sm text-blue-300 ml-2">
+                  (Filtrado por: {filters.estatus})
+                </span>
+              )}
             </h3>
             <DataTable
               data={
                 activeTab === 'periodo'
-                  ? currentData.data.compras || []
-                  : currentData.data.compras_por_departamento || []
+                  ? datosFiltrados.compras || []
+                  : datosFiltrados.compras_por_departamento || []
               }
-              columns={
-                activeTab === 'periodo'
-                  ? columnasPeriodo
-                  : columnasDepartamentos
-              }
+              columns={activeTab === 'periodo' ? columnasPeriodo : columnasDepartamentos}
               loading={loading}
               emptyMessage={`No se encontraron compras ${
                 activeTab === 'periodo'
                   ? 'en el período seleccionado'
                   : 'por departamentos'
-              }`}
+              }${filters.estatus ? ` con estatus: ${filters.estatus}` : ''}`}
             />
           </div>
         </>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useDashboardComplete, useFechasComunes } from '../../hooks/useReportes'
+import { useDashboardComplete } from '../../hooks/useReportes'
 import KPICard from '../../components/common/KPICard'
 import AlertsPanel from '../../components/common/AlertsPanel'
 import TrendChart from '../../components/charts/TrendChart'
@@ -16,8 +16,6 @@ const Dashboard = () => {
     isDashboardStale,
     debug 
   } = useDashboardComplete(periodo)
-  
-  const { rangos } = useFechasComunes()
 
   const handlePeriodoChange = (newPeriodo) => {
     setPeriodo(newPeriodo)
