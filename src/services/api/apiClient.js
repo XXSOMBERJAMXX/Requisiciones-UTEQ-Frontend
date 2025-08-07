@@ -64,7 +64,7 @@ apiClient.interceptors.request.use(
     }
 
     // Log simple para debugging
-    console.log(`🚀 ${config.method?.toUpperCase()} ${config.url}`)
+    // console.log(`🚀 ${config.method?.toUpperCase()} ${config.url}`)
 
     return config
   },
@@ -78,7 +78,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => {
     // Log simple de respuesta exitosa
-    console.log(`✅ ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`)
+    // console.log(`✅ ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`)
     return response
   },
   (error) => {

@@ -57,11 +57,12 @@ export const useReportes = (fetcher, dependencies = [], options = {}) => {
   }
 
   useEffect(() => {
-    if (
-      autoFetch &&
-      dependencies.some((dep) => dep !== null && dep !== undefined)
-    ) {
-      fetchData()
+    // 🔧 CORREGIDO: Si autoFetch es true, fetchear independientemente de dependencies
+    if (autoFetch) {
+      // Solo verificar dependencies si no está vacío
+      if (dependencies.length === 0 || dependencies.some((dep) => dep !== null && dep !== undefined)) {
+        fetchData()
+      }
     }
 
     return () => {

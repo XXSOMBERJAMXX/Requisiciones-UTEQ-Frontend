@@ -61,14 +61,14 @@ apiClient.interceptors.request.use(
     }
 
     // Log para debugging - puedes comentar esta línea en producción
-    console.log(
-      `🚀 API REQUEST: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`,
-      {
-        params: config.params,
-        data: config.data,
-        headers: config.headers,
-      }
-    )
+    // console.log(
+    //   `🚀 API REQUEST: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`,
+    //   {
+    //     params: config.params,
+    //     data: config.data,
+    //     headers: config.headers,
+    //   }
+    // )
 
     return config
   },
@@ -82,10 +82,10 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => {
     // Log para debugging - puedes comentar esta línea en producción
-    console.log(
-      `✅ API RESPONSE: ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`,
-      response.data
-    )
+    // console.log(
+    //   `✅ API RESPONSE: ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`,
+    //   response.data
+    // )
 
     return response
   },

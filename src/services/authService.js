@@ -230,7 +230,7 @@ class AuthService extends BaseService {
   getToken() {
     try {
       const token = localStorage.getItem('requisiciones-uteq-token') // Usar tu clave exacta
-      console.log('🔑 Token obtenido:', token ? 'existe' : 'no existe')
+      // console.log('🔑 Token obtenido:', token ? 'existe' : 'no existe')
       return token
     } catch (error) {
       console.error('Error obteniendo token:', error)
@@ -245,12 +245,12 @@ class AuthService extends BaseService {
     try {
       const userStr = localStorage.getItem('requisiciones-uteq-user') // Usar tu clave exacta
       if (!userStr) {
-        console.log('👤 No hay usuario guardado')
+        // console.log('👤 No hay usuario guardado')
         return null
       }
 
       const user = JSON.parse(userStr)
-      console.log('👤 Usuario obtenido:', user?.nombre || 'sin nombre')
+      // console.log('👤 Usuario obtenido:', user?.nombre || 'sin nombre')
       return user
     } catch (error) {
       console.error('Error parseando usuario guardado:', error)
@@ -266,10 +266,10 @@ class AuthService extends BaseService {
     try {
       localStorage.setItem('requisiciones-uteq-token', token)
       localStorage.setItem('requisiciones-uteq-user', JSON.stringify(user))
-      console.log('💾 Datos guardados:', {
-        token: 'guardado',
-        user: user?.nombre,
-      })
+      // console.log('💾 Datos guardados:', {
+      //   token: 'guardado',
+      //   user: user?.nombre,
+      // })
     } catch (error) {
       console.error('Error guardando datos de auth:', error)
     }
@@ -282,7 +282,7 @@ class AuthService extends BaseService {
     try {
       localStorage.removeItem('requisiciones-uteq-token')
       localStorage.removeItem('requisiciones-uteq-user')
-      console.log('🧹 Datos de auth limpiados')
+      // console.log('🧹 Datos de auth limpiados')
     } catch (error) {
       console.error('Error limpiando datos de auth:', error)
     }
