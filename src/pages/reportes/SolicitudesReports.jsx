@@ -189,7 +189,7 @@ const SolicitudesReports = () => {
         <>
           {/* Distribución por Estatus (solo en tab estatus) */}
           {activeTab === 'estatus' && currentData.data.distribucion_estatus && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="gap-6">
               <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
                 <h3 className="text-lg font-semibold text-slate-100 mb-4">
                   Distribución por Estatus
