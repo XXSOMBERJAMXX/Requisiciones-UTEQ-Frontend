@@ -1,4 +1,4 @@
-// ===== ARCHIVO: src/api/BaseService.js - VERSIÓN SIMPLE =====
+// ===== ARCHIVO: src/api/BaseService.js - VERSIÓN CORREGIDA =====
 import apiClient from './apiClient'
 import { API_CONFIG } from './config'
 
@@ -47,9 +47,32 @@ class BaseService {
 
     // Si hay archivos, crear FormData
     if (files && files.length > 0) {
-      payload = this.createFormData(data, files)
+      const formData = new FormData()
+      
+      // Agregar datos del formulario
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          if (typeof value === 'object' && !Array.isArray(value)) {
+            formData.append(key, JSON.stringify(value))
+          } else if (Array.isArray(value)) {
+            formData.append(key, JSON.stringify(value))
+          } else {
+            formData.append(key, value)
+          }
+        }
+      })
+      
+      // Agregar archivos con el nombre correcto que espera el backend
+      files.forEach((file) => {
+        formData.append('files', file) // Cambio: usar 'files' en lugar de 'archivos'
+      })
+      
+      payload = formData
       config.headers = { 'Content-Type': 'multipart/form-data' }
     }
+
+    console.log('payload', payload)
+    console.log('files', files)
 
     const response = await this.client.post(this.baseUrl, payload, config)
     return this.formatResponse(response)
@@ -153,7 +176,7 @@ class BaseService {
   }
 
   /**
-   * Crear FormData para archivos
+   * Crear FormData para archivos - VERSIÓN CORREGIDA
    * @param {Object} data - Datos del formulario
    * @param {Array} files - Archivos
    * @returns {FormData} FormData listo
@@ -174,10 +197,10 @@ class BaseService {
       }
     })
 
-    // Agregar archivos
-    files.forEach((file, index) => {
+    // Agregar archivos con el nombre correcto
+    files.forEach((file) => {
       if (file) {
-        formData.append(`files[${index}]`, file)
+        formData.append('files', file) // Cambio: usar 'files' consistentemente
       }
     })
 

@@ -23,6 +23,9 @@ class SolicitudesService extends BaseService {
       archivos.forEach(file => this.validateFile(file))
     }
 
+    console.log('solicitudData', solicitudData)
+    console.log('archivos', archivos)
+
     return await super.create(solicitudData, archivos)
   }
 
