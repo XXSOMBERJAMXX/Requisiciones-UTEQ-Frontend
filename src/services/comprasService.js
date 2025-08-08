@@ -1,4 +1,4 @@
-// ===== ARCHIVO: src/services/comprasService.js REFACTORIZADO =====
+// ===== ARCHIVO: src/services/comprasService.js REFACTORIZADO CON ARCHIVOS =====
 import BaseService from './api/BaseService'
 
 class ComprasService extends BaseService {
@@ -15,10 +15,16 @@ class ComprasService extends BaseService {
    * @returns {Promise<Object>} Respuesta del servidor
    */
   async create(compraData, archivos = []) {
+    // Validar datos antes de enviar
+    this.validateCompraData(compraData)
+
     // Validar archivos si existen
     if (archivos.length > 0) {
       archivos.forEach(file => this.validateFile(file))
     }
+
+    console.log('compraData', compraData)
+    console.log('archivos', archivos)
 
     return await super.create(compraData, archivos)
   }
@@ -34,7 +40,12 @@ class ComprasService extends BaseService {
     // Adaptar respuesta para mantener compatibilidad con el frontend existente
     return {
       compras: response.data?.data || response.data?.compras || response.data || [],
-      pagination: response.data?.pagination || response.data?.meta || null,
+      pagination: response.data?.pagination || response.data?.meta || {
+        page: response.data?.page || 1,
+        pages: response.data?.pages || 1,
+        total: response.data?.total || 0,
+        limit: response.data?.limit || 10,
+      },
       total: response.data?.total || response.data?.count || 
              (response.data?.data ? response.data.data.length : 0),
     }
@@ -75,24 +86,82 @@ class ComprasService extends BaseService {
     return this.formatResponse(response)
   }
 
+  // ===== MÉTODOS DE ARCHIVOS PARA COMPRAS =====
+
+  /**
+   * Descargar archivo adjunto de compra
+   * @param {string|number} compraId - ID de la compra
+   * @param {string} nombreArchivo - Nombre del archivo
+   * @returns {Promise<boolean>} Éxito de la descarga
+   */
+  async downloadDocument(compraId, nombreArchivo) {
+    if (!compraId || !nombreArchivo) {
+      throw new Error('ID de compra y nombre de archivo requeridos')
+    }
+
+    const response = await this.client.get(
+      `${this.baseUrl}/${compraId}/archivos/${nombreArchivo}`,
+      { responseType: 'blob' }
+    )
+
+    // Extraer nombre del archivo del header
+    const contentDisposition = response.headers['content-disposition']
+    const filename = contentDisposition
+      ? contentDisposition.split('filename=')[1]?.replace(/"/g, '')
+      : nombreArchivo
+
+    // Crear blob y descargar
+    const blob = new Blob([response.data])
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', filename)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+
+    return true
+  }
+
+  /**
+   * Eliminar archivo específico de una compra
+   * @param {string|number} compraId - ID de la compra
+   * @param {string} nombreArchivo - Nombre del archivo a eliminar
+   * @returns {Promise<Object>} Compra actualizada
+   */
+  async deleteDocument(compraId, nombreArchivo) {
+    if (!compraId || !nombreArchivo) {
+      throw new Error('ID de compra y nombre de archivo requeridos')
+    }
+
+    // Para eliminar un archivo, actualizar la compra con el archivo en la lista de eliminación
+    const response = await this.client.put(`${this.baseUrl}/${compraId}`, {
+      archivos_a_eliminar: [nombreArchivo]
+    })
+
+    return this.formatResponse(response)
+  }
+
   // ===== MÉTODOS ESPECÍFICOS DE FACTURAS =====
 
   /**
    * Agregar factura a compra
    * @param {string|number} compraId - ID de la compra
    * @param {Object} facturaData - Datos de la factura
-   * @param {File} archivo - Archivo de la factura
+   * @param {Array} archivos - Archivos de la factura
    * @returns {Promise<Object>} Factura creada
    */
-  async addFactura(compraId, facturaData, archivo) {
+  async addFactura(compraId, facturaData, archivos = []) {
     if (!compraId) throw new Error('ID de compra requerido')
-    if (!archivo) throw new Error('Archivo de factura requerido')
 
-    // Validar archivo
-    this.validateFile(archivo)
+    // Validar archivos si existen
+    if (archivos.length > 0) {
+      archivos.forEach(file => this.validateFile(file))
+    }
 
-    // Crear FormData con el archivo
-    const formData = this.createFormData(facturaData, [archivo])
+    // Crear FormData con los archivos
+    const formData = this.createFormData(facturaData, archivos)
 
     const response = await this.client.post(
       `${this.baseUrl}/${compraId}/facturas`,
@@ -141,10 +210,10 @@ class ComprasService extends BaseService {
    * @param {string|number} compraId - ID de la compra
    * @param {string|number} facturaId - ID de la factura
    * @param {Object} facturaData - Datos actualizados
-   * @param {File} archivo - Nuevo archivo (opcional)
+   * @param {Array} archivos - Nuevos archivos (opcional)
    * @returns {Promise<Object>} Factura actualizada
    */
-  async updateFactura(compraId, facturaId, facturaData, archivo = null) {
+  async updateFactura(compraId, facturaId, facturaData, archivos = []) {
     if (!compraId || !facturaId) {
       throw new Error('ID de compra y factura requeridos')
     }
@@ -152,10 +221,10 @@ class ComprasService extends BaseService {
     let payload = facturaData
     let config = {}
 
-    // Si hay archivo nuevo, crear FormData
-    if (archivo) {
-      this.validateFile(archivo)
-      payload = this.createFormData(facturaData, [archivo])
+    // Si hay archivos nuevos, crear FormData
+    if (archivos.length > 0) {
+      archivos.forEach(file => this.validateFile(file))
+      payload = this.createFormData(facturaData, archivos)
       config.headers = { 'Content-Type': 'multipart/form-data' }
     }
 
@@ -317,6 +386,18 @@ class ComprasService extends BaseService {
     return true
   }
 
+  /**
+   * Obtener historial de una compra
+   * @param {string|number} id - ID de la compra
+   * @returns {Promise<Array>} Historial de cambios
+   */
+  async getHistory(id) {
+    if (!id) throw new Error('ID de compra requerido')
+
+    const response = await this.client.get(`${this.baseUrl}/${id}/history`)
+    return this.formatResponse(response)
+  }
+
   // ===== MÉTODOS DE WORKFLOW DE COMPRAS =====
 
   /**
@@ -395,7 +476,7 @@ class ComprasService extends BaseService {
     if (!compraData) throw new Error('Datos de compra requeridos')
 
     // Validaciones básicas según tu dominio
-    const required = ['concepto', 'monto']
+    const required = ['proveedor_seleccionado', 'monto_total', 'fecha_compra']
     const missing = required.filter((field) => !compraData[field])
 
     if (missing.length > 0) {
@@ -403,7 +484,7 @@ class ComprasService extends BaseService {
     }
 
     // Validar monto
-    if (compraData.monto && compraData.monto <= 0) {
+    if (compraData.monto_total && compraData.monto_total <= 0) {
       throw new Error('El monto debe ser mayor a 0')
     }
 
@@ -448,16 +529,47 @@ class ComprasService extends BaseService {
     return this.formatResponse(response)
   }
 
-  /**
-   * Obtener historial de una compra
-   * @param {string|number} id - ID de la compra
-   * @returns {Promise<Array>} Historial de cambios
-   */
-  async getHistory(id) {
-    if (!id) throw new Error('ID de compra requerido')
+  // ===== MÉTODOS PARA VALIDACIÓN DE PERMISOS =====
 
-    const response = await this.client.get(`${this.baseUrl}/${id}/history`)
-    return this.formatResponse(response)
+  /**
+   * Verificar si una compra puede ser editada por el usuario actual
+   * @param {Object} compra - Datos de la compra
+   * @param {Object} usuario - Datos del usuario actual
+   * @returns {boolean} Puede editar o no
+   */
+  canEdit(compra, usuario) {
+    // Admin siempre puede editar
+    if (['admin_sistema', 'administrativo'].includes(usuario.rol)) return true
+
+    // Aprobadores pueden editar compras no entregadas
+    if (usuario.rol === 'aprobador' && !['entregada'].includes(compra.estatus)) return true
+
+    // El creador puede editar compras ordenadas únicamente
+    if (compra.creado_por === usuario.id_usuario && compra.estatus === 'ordenada') return true
+
+    return false
+  }
+
+  /**
+   * Verificar si una compra puede ser eliminada por el usuario actual
+   * @param {Object} compra - Datos de la compra
+   * @param {Object} usuario - Datos del usuario actual
+   * @returns {boolean} Puede eliminar o no
+   */
+  canDelete(compra, usuario) {
+    // Admin sistema siempre puede eliminar
+    if (usuario.rol === 'admin_sistema') return true
+
+    // Administrativo puede eliminar compras no entregadas
+    if (usuario.rol === 'administrativo' && !['entregada'].includes(compra.estatus)) return true
+
+    // Aprobador puede eliminar compras no entregadas
+    if (usuario.rol === 'aprobador' && !['entregada'].includes(compra.estatus)) return true
+
+    // El creador puede eliminar compras ordenadas únicamente
+    if (compra.creado_por === usuario.id_usuario && compra.estatus === 'ordenada') return true
+
+    return false
   }
 }
 

@@ -21,6 +21,40 @@ const formatDateForInput = (dateString) => {
   }
 }
 
+// Helper function to format file size
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes'
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+// Helper function to get file icon based on type
+const getFileIcon = (filename) => {
+  const extension = filename.toLowerCase().split('.').pop()
+  
+  switch (extension) {
+    case 'pdf':
+      return '📄'
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+      return '🖼️'
+    case 'doc':
+    case 'docx':
+      return '📝'
+    case 'xls':
+    case 'xlsx':
+      return '📊'
+    case 'xml':
+      return '📋'
+    default:
+      return '📎'
+  }
+}
+
 export default function GestionarCompras() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -28,6 +62,8 @@ export default function GestionarCompras() {
   const [invoiceFile, setInvoiceFile] = useState(null)
   const [solicitudes, setSolicitudes] = useState([])
   const [loading, setLoading] = useState(false)
+  const [existingFiles, setExistingFiles] = useState([])
+  const [deletingFiles, setDeletingFiles] = useState([])
 
   const [formData, setFormData] = useState({
     solicitud_id: '',
@@ -54,7 +90,8 @@ export default function GestionarCompras() {
         // Si es edición, cargar los datos de la compra
         if (id) {
           const compra = await comprasService.getById(id)
-          console.log(compra.data)
+          console.log('Compra data:', compra.data)
+          
           setFormData({
             solicitud_id: compra.data.solicitud_id || '',
             proveedor_seleccionado: compra.data.proveedor_seleccionado || '',
@@ -66,6 +103,11 @@ export default function GestionarCompras() {
             terminos_entrega: compra.data.terminos_entrega || '',
             observaciones: compra.data.observaciones || '',
           })
+
+          // Cargar archivos existentes
+          if (compra.data.archivos_adjuntos && compra.data.archivos_adjuntos.length > 0) {
+            setExistingFiles(compra.data.archivos_adjuntos)
+          }
         }
       } catch (error) {
         showNotification('Error al cargar datos', 'error')
@@ -82,6 +124,35 @@ export default function GestionarCompras() {
       ...prev,
       [name]: value,
     }))
+  }
+
+  const handleDownloadFile = async (archivo) => {
+    try {
+      await comprasService.downloadDocument(id, archivo.nombre_archivo)
+      showNotification('Archivo descargado exitosamente', 'success')
+    } catch (error) {
+      console.error('Error downloading file:', error)
+      showNotification('Error al descargar el archivo', 'error')
+    }
+  }
+
+  const handleDeleteFile = async (archivo) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar el archivo "${archivo.nombre_original}"?`)) {
+      return
+    }
+
+    setDeletingFiles(prev => [...prev, archivo.nombre_archivo])
+
+    try {
+      await comprasService.deleteDocument(id, archivo.nombre_archivo)
+      setExistingFiles(prev => prev.filter(file => file.nombre_archivo !== archivo.nombre_archivo))
+      showNotification('Archivo eliminado exitosamente', 'success')
+    } catch (error) {
+      console.error('Error deleting file:', error)
+      showNotification('Error al eliminar el archivo', 'error')
+    } finally {
+      setDeletingFiles(prev => prev.filter(name => name !== archivo.nombre_archivo))
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -260,12 +331,70 @@ export default function GestionarCompras() {
           placeholder="Observaciones adicionales"
         />
 
+        {/* Sección de archivos existentes */}
+        {id && existingFiles.length > 0 && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-300 mb-3">
+              Archivos Existentes ({existingFiles.length})
+            </label>
+            <div className="space-y-2 max-h-40 overflow-y-auto bg-gray-700 rounded-lg p-3">
+              {existingFiles.map((archivo, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-gray-600 rounded-lg hover:bg-gray-500 transition-colors"
+                >
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    <span className="text-2xl">
+                      {getFileIcon(archivo.nombre_original)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">
+                        {archivo.nombre_original}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatFileSize(archivo.tamaño)} • 
+                        {new Date(archivo.fecha_subida).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 ml-3">
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadFile(archivo)}
+                      className="p-2 text-blue-400 hover:text-blue-300 hover:bg-gray-700 rounded-lg transition-colors"
+                      title="Descargar archivo"
+                    >
+                      <DownloadIcon className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile(archivo)}
+                      disabled={deletingFiles.includes(archivo.nombre_archivo)}
+                      className="p-2 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Eliminar archivo"
+                    >
+                      {deletingFiles.includes(archivo.nombre_archivo) ? (
+                        <LoaderIcon className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <TrashIcon className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Sección de subida de nuevos archivos */}
         <div className="mb-6 p-4 border-2 border-dashed border-gray-600 rounded-md bg-gray-700">
           <label
             htmlFor="invoiceUpload"
             className="block text-sm font-medium text-gray-300 mb-2"
           >
-            Cargar Factura(s)
+            {id ? 'Agregar Nuevos Archivos' : 'Cargar Factura(s)'}
           </label>
           <div className="flex items-center justify-center w-full">
             <label
@@ -292,19 +421,27 @@ export default function GestionarCompras() {
             </label>
           </div>
           {invoiceFile && (
-            <div className="mt-2 flex items-center justify-between p-2 bg-gray-600 rounded">
-              <p className="text-sm text-gray-300">
-                Archivo seleccionado:{' '}
-                <span className="font-semibold text-blue-400">
-                  {invoiceFile.name}
+            <div className="mt-3 flex items-center justify-between p-3 bg-gray-600 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <span className="text-xl">
+                  {getFileIcon(invoiceFile.name)}
                 </span>
-              </p>
+                <div>
+                  <p className="text-sm font-medium text-gray-300">
+                    {invoiceFile.name}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {formatFileSize(invoiceFile.size)}
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setInvoiceFile(null)}
-                className="text-red-400 hover:text-red-300 text-sm"
+                className="p-2 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded-lg transition-colors"
+                title="Remover archivo"
               >
-                Remover
+                <TrashIcon className="w-4 h-4" />
               </button>
             </div>
           )}
@@ -328,6 +465,7 @@ export default function GestionarCompras() {
   )
 }
 
+// Iconos
 const UploadIcon = (props) => (
   <svg
     {...props}
@@ -345,5 +483,68 @@ const UploadIcon = (props) => (
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <polyline points="17 8 12 3 7 8" />
     <line x1="12" x2="12" y1="3" y2="15" />
+  </svg>
+)
+
+const DownloadIcon = (props) => (
+  <svg
+    {...props}
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" x2="12" y1="15" y2="3" />
+  </svg>
+)
+
+const TrashIcon = (props) => (
+  <svg
+    {...props}
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polyline points="3 6 5 6 21 6" />
+    <path d="m19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" x2="10" y1="11" y2="17" />
+    <line x1="14" x2="14" y1="11" y2="17" />
+  </svg>
+)
+
+const LoaderIcon = (props) => (
+  <svg
+    {...props}
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="12" x2="12" y1="2" y2="6" />
+    <line x1="12" x2="12" y1="18" y2="22" />
+    <line x1="4.93" x2="7.76" y1="4.93" y2="7.76" />
+    <line x1="16.24" x2="19.07" y1="16.24" y2="19.07" />
+    <line x1="2" x2="6" y1="12" y2="12" />
+    <line x1="18" x2="22" y1="12" y2="12" />
+    <line x1="4.93" x2="7.76" y1="19.07" y2="16.24" />
+    <line x1="16.24" x2="19.07" y1="7.76" y2="4.93" />
   </svg>
 )
