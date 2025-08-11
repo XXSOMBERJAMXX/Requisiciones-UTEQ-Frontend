@@ -12,7 +12,9 @@ import {
   FaPlus,
   FaSave,
   FaUpload,
-  FaTrash
+  FaTrash,
+  FaDownload,
+  FaTimes,
 } from 'react-icons/fa'
 
 const EditarSolicitud = () => {
@@ -28,6 +30,7 @@ const EditarSolicitud = () => {
   const [datosSolicitud, setDatosSolicitud] = useState({
     tipo_requisicion: 'productos',
     descripcion_detallada: '',
+    cantidad: '',
     justificacion: '',
     urgencia: 'media',
     presupuesto_estimado: '',
@@ -40,14 +43,15 @@ const EditarSolicitud = () => {
     {
       nombre: '',
       cantidad: '',
-      unidad: '',
+      unidad: 'piezas',
       precio_estimado: '',
       justificacion: '',
     },
   ])
 
-  // Estado para archivos (nuevos archivos a subir)
+  // Estado para archivos
   const [nuevosArchivos, setNuevosArchivos] = useState([])
+  const [archivosAEliminar, setArchivosAEliminar] = useState([])
 
   // Estados de carga y errores
   const [guardando, setGuardando] = useState(false)
@@ -66,42 +70,53 @@ const EditarSolicitud = () => {
       const solicitud = response.data || response
 
       // Verificar que la solicitud se pueda editar
-      if (
-        solicitud.estatus !== 'pendiente' &&
-        solicitud.estatus !== 'denegada'
-      ) {
+      if (!['pendiente', 'en_revision'].includes(solicitud.estatus)) {
         throw new Error(
-          'Solo se pueden editar solicitudes pendientes o denegadas'
+          'Solo se pueden editar solicitudes pendientes o en revisión'
         )
       }
 
       setSolicitudOriginal(solicitud)
 
+      // Procesar fecha de necesidad con más cuidado
+      let fechaNecesidad = ''
+      if (solicitud.fecha_necesidad) {
+        try {
+          const fecha = new Date(solicitud.fecha_necesidad)
+          if (!isNaN(fecha.getTime())) {
+            fechaNecesidad = fecha.toISOString().split('T')[0]
+          }
+        } catch (err) {
+          console.warn('Error procesando fecha:', err)
+        }
+      }
+
       // Cargar datos en el formulario
-      setDatosSolicitud({
+      const nuevosDatos = {
         tipo_requisicion: solicitud.tipo_requisicion || 'productos',
         descripcion_detallada: solicitud.descripcion_detallada || '',
+        cantidad: solicitud.cantidad || '',
         justificacion: solicitud.justificacion || '',
         urgencia: solicitud.urgencia || 'media',
         presupuesto_estimado: solicitud.presupuesto_estimado || '',
-        fecha_necesidad: solicitud.fecha_necesidad
-          ? new Date(solicitud.fecha_necesidad).toISOString().split('T')[0]
-          : '',
+        fecha_necesidad: fechaNecesidad,
         comentarios_generales: solicitud.comentarios_generales || '',
-      })
+      }
+
+      setDatosSolicitud(nuevosDatos)
 
       // Cargar ítems existentes o crear uno vacío
       if (solicitud.items && solicitud.items.length > 0) {
-        setItems(
-          solicitud.items.map((item) => ({
-            id: item.id, // Mantener ID para actualización
-            nombre: item.nombre || '',
-            cantidad: item.cantidad || '',
-            unidad: item.unidad || '',
-            precio_estimado: item.precio_estimado || '',
-            justificacion: item.justificacion || '',
-          }))
-        )
+        const itemsProcesados = solicitud.items.map((item, index) => ({
+          id: item.id || `existing_${index}`, // Mantener ID o crear uno temporal
+          nombre: item.nombre || '',
+          cantidad: item.cantidad || '',
+          unidad: item.unidad || 'piezas', // Agregar unidad por defecto
+          precio_estimado: item.precio_estimado || '',
+          justificacion: item.justificacion || '',
+        }))
+
+        setItems(itemsProcesados)
       }
 
       setError('')
@@ -148,7 +163,7 @@ const EditarSolicitud = () => {
       {
         nombre: '',
         cantidad: '',
-        unidad: '',
+        unidad: 'piezas',
         precio_estimado: '',
         justificacion: '',
       },
@@ -179,6 +194,35 @@ const EditarSolicitud = () => {
     setNuevosArchivos((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // Manejar eliminación de archivos existentes
+  const marcarArchivoParaEliminar = (nombreArchivo) => {
+    if (!archivosAEliminar.includes(nombreArchivo)) {
+      setArchivosAEliminar((prev) => [...prev, nombreArchivo])
+    }
+  }
+
+  const cancelarEliminacionArchivo = (nombreArchivo) => {
+    setArchivosAEliminar((prev) =>
+      prev.filter((archivo) => archivo !== nombreArchivo)
+    )
+  }
+
+  // Descargar archivo existente
+  const descargarArchivo = async (archivo) => {
+    try {
+      // Si el archivo tiene ruta_archivo (URL de Cloudinary), abrir en nueva ventana
+      if (archivo.ruta_archivo && archivo.ruta_archivo.startsWith('http')) {
+        window.open(archivo.ruta_archivo, '_blank')
+      } else {
+        // Usar método del servicio para descargar
+        await solicitudesService.downloadDocument(id, archivo.nombre_archivo)
+      }
+    } catch (error) {
+      console.error('Error al descargar archivo:', error)
+      alert('Error al descargar el archivo')
+    }
+  }
+
   // Calcular presupuesto total de ítems
   const calcularPresupuestoTotal = () => {
     return items.reduce((total, item) => {
@@ -193,7 +237,8 @@ const EditarSolicitud = () => {
     const nuevosErrores = {}
 
     if (!datosSolicitud.descripcion_detallada.trim()) {
-      nuevosErrores.descripcion_detallada = 'La descripción detallada es requerida'
+      nuevosErrores.descripcion_detallada =
+        'La descripción detallada es requerida'
     }
 
     if (!datosSolicitud.justificacion.trim()) {
@@ -202,6 +247,11 @@ const EditarSolicitud = () => {
 
     if (!datosSolicitud.fecha_necesidad) {
       nuevosErrores.fecha_necesidad = 'La fecha de necesidad es requerida'
+    }
+
+    // Validar cantidad principal
+    if (!datosSolicitud.cantidad || datosSolicitud.cantidad <= 0) {
+      nuevosErrores.cantidad = 'La cantidad debe ser mayor a 0'
     }
 
     // Validar que al menos haya un ítem válido
@@ -238,11 +288,13 @@ const EditarSolicitud = () => {
           datosSolicitud.presupuesto_estimado || calcularPresupuestoTotal(),
       }
 
-      console.log('Datos a actualizar:', datosActualizacion)
-      console.log('Nuevos archivos:', nuevosArchivos)
-
-      // Llamada al API para actualizar
-      await solicitudesService.update(id, datosActualizacion, nuevosArchivos)
+      // Llamada al API para actualizar con el nuevo método que maneja eliminación
+      await solicitudesService.update(
+        id,
+        datosActualizacion,
+        nuevosArchivos,
+        archivosAEliminar
+      )
 
       alert('Solicitud actualizada exitosamente')
       navigate(`/solicitudes/${id}`)
@@ -256,14 +308,18 @@ const EditarSolicitud = () => {
 
   const presupuestoCalculado = calcularPresupuestoTotal()
 
+  // Obtener archivos existentes que no están marcados para eliminación
+  const archivosExistentes = solicitudOriginal?.archivos_adjuntos || []
+  const archivosVisibles = archivosExistentes.filter(
+    archivo => !archivosAEliminar.includes(archivo.nombre_archivo)
+  )
+
   // Estados de carga
   if (cargandoSolicitud) {
     return (
       <SolicitudesLayout title="Cargando...">
         <div className="flex items-center justify-center h-64">
-          <div className="text-white text-lg">
-            Cargando solicitud...
-          </div>
+          <div className="text-white text-lg">Cargando solicitud...</div>
         </div>
       </SolicitudesLayout>
     )
@@ -282,7 +338,7 @@ const EditarSolicitud = () => {
   }
 
   return (
-    <SolicitudesLayout 
+    <SolicitudesLayout
       title="Editar Solicitud"
       subtitle={`Folio: ${solicitudOriginal.folio_solicitud}`}
       backTo={`/solicitudes/${id}`}
@@ -291,15 +347,16 @@ const EditarSolicitud = () => {
       <div className="bg-blue-900/20 border border-blue-500/50 rounded-lg p-4 mb-6">
         <div className="flex items-start space-x-2 text-blue-400">
           <span className="text-sm">
-            <strong>Nota:</strong> Al actualizar esta solicitud, el estado cambiará a "Pendiente" 
-            y deberá ser revisada nuevamente por los aprobadores.
+            <strong>Nota:</strong> Al actualizar esta solicitud, el estado
+            cambiará a "Pendiente" y deberá ser revisada nuevamente por los
+            aprobadores.
           </span>
         </div>
       </div>
 
       <form onSubmit={manejarActualizacion} className="space-y-6">
         {/* Información básica */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Select
             label="Tipo de Requisición"
             name="tipo_requisicion"
@@ -310,6 +367,17 @@ const EditarSolicitud = () => {
               { value: 'servicios', label: 'Servicios' },
               { value: 'mantenimiento', label: 'Mantenimiento' },
             ]}
+            required
+          />
+
+          <Input
+            label="Cantidad Total"
+            name="cantidad"
+            type="number"
+            value={datosSolicitud.cantidad}
+            onChange={manejarCambioInput}
+            min="1"
+            error={errores.cantidad}
             required
           />
 
@@ -388,24 +456,117 @@ const EditarSolicitud = () => {
         </div>
 
         {/* Sección de archivos existentes */}
-        {solicitudOriginal.documentos && solicitudOriginal.documentos.length > 0 && (
-          <div className="mb-6 p-4 bg-gray-700 rounded-lg border border-gray-600">
+        {solicitudOriginal?.archivos_adjuntos &&
+          solicitudOriginal.archivos_adjuntos.length > 0 && (
+            <div className="mb-6 p-4 bg-gray-700 rounded-lg border border-gray-600">
+              <h3 className="text-lg font-medium text-white mb-3">
+                Documentos Existentes ({archivosVisibles.length})
+              </h3>
+
+              {archivosVisibles.length > 0 ? (
+                <div className="space-y-2">
+                  {archivosVisibles.map((archivo, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between bg-gray-800 p-3 rounded"
+                    >
+                      <div className="flex-1">
+                        <span className="text-sm text-gray-300 font-medium">
+                          {archivo.nombre_original || archivo.nombre_archivo}
+                        </span>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {new Date(archivo.fecha_subida).toLocaleDateString(
+                            'es-MX'
+                          )}{' '}
+                          •
+                          {archivo.tamaño
+                            ? (archivo.tamaño / 1024 / 1024).toFixed(2) + ' MB'
+                            : 'Tamaño desconocido'}{' '}
+                          •{archivo.tipo_mime || 'Tipo desconocido'}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => descargarArchivo(archivo)}
+                          className="p-2"
+                          title="Descargar archivo"
+                        >
+                          <FaDownload className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          onClick={() =>
+                            marcarArchivoParaEliminar(archivo.nombre_archivo)
+                          }
+                          className="p-2"
+                          title="Eliminar archivo"
+                        >
+                          <FaTrash className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400 text-sm">
+                  Todos los archivos existentes han sido marcados para
+                  eliminación.
+                </p>
+              )}
+
+              {/* Archivos marcados para eliminación */}
+              {archivosAEliminar.length > 0 && (
+                <div className="mt-4 p-3 bg-red-900/20 border border-red-500/50 rounded">
+                  <h4 className="text-sm font-medium text-red-400 mb-2">
+                    Archivos marcados para eliminación (
+                    {archivosAEliminar.length}):
+                  </h4>
+                  <div className="space-y-1">
+                    {archivosAEliminar.map((nombreArchivo, index) => {
+                      const archivo = solicitudOriginal.archivos_adjuntos.find(
+                        (a) => a.nombre_archivo === nombreArchivo
+                      )
+                      return (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between text-xs"
+                        >
+                          <span className="text-red-300">
+                            {archivo?.nombre_original || nombreArchivo}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() =>
+                              cancelarEliminacionArchivo(nombreArchivo)
+                            }
+                            className="p-1 text-xs"
+                            title="Cancelar eliminación"
+                          >
+                            <FaTimes className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+        {/* Si no hay archivos */}
+        {(!solicitudOriginal?.archivos_adjuntos ||
+          solicitudOriginal.archivos_adjuntos.length === 0) && (
+          <div className="mb-6 p-4 bg-gray-600 rounded-lg border border-gray-500">
             <h3 className="text-lg font-medium text-white mb-3">
               Documentos Existentes
             </h3>
-            <div className="space-y-2">
-              {solicitudOriginal.documentos.map((doc, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between bg-gray-800 p-2 rounded"
-                >
-                  <span className="text-sm text-gray-300">{doc.nombre_archivo}</span>
-                  <span className="text-xs text-gray-400">
-                    {new Date(doc.fecha_subida).toLocaleDateString('es-MX')}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <p className="text-gray-400 text-sm">
+              No hay documentos adjuntos en esta solicitud.
+            </p>
           </div>
         )}
 
@@ -442,13 +603,22 @@ const EditarSolicitud = () => {
 
           {nuevosArchivos.length > 0 && (
             <div className="mt-4 space-y-2">
-              <h4 className="text-sm font-medium text-white">Nuevos archivos a subir:</h4>
+              <h4 className="text-sm font-medium text-white">
+                Nuevos archivos a subir:
+              </h4>
               {nuevosArchivos.map((archivo, index) => (
                 <div
                   key={index}
                   className="flex items-center justify-between bg-gray-800 p-2 rounded"
                 >
-                  <span className="text-sm text-gray-300">{archivo.name}</span>
+                  <div>
+                    <span className="text-sm text-gray-300">
+                      {archivo.name}
+                    </span>
+                    <div className="text-xs text-gray-400">
+                      {(archivo.size / 1024 / 1024).toFixed(2)} MB
+                    </div>
+                  </div>
                   <Button
                     type="button"
                     variant="danger"

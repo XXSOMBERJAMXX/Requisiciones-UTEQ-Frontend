@@ -120,8 +120,7 @@ export const SeccionDocumentos = ({ documentos }) => {
 
   // Función para descargar directamente
   const handleDirectDownload = (documento) => {
-    const API_BASE_URL = 'http://localhost:3000';
-    const fileUrl = `${API_BASE_URL}/${documento.ruta_archivo || documento.nombre_archivo}`;
+    const fileUrl = `${documento.ruta_archivo || documento.nombre_archivo}`;
     
     const link = document.createElement('a');
     link.href = fileUrl;

@@ -10,8 +10,7 @@ const DocumentPreviewModal = ({ documento, isOpen, onClose }) => {
   if (!isOpen || !documento) return null;
 
   // Configurar la URL del archivo (ajusta según tu configuración del backend)
-  const API_BASE_URL = 'http://localhost:3000';
-  const fileUrl = `${API_BASE_URL}/${documento.ruta_archivo || documento.nombre_archivo}`;
+  const fileUrl = `${documento.ruta_archivo || documento.nombre_archivo}`;
 
   // Obtener extensión del archivo
   const getFileExtension = (filename) => {

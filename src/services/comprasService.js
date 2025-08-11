@@ -20,7 +20,7 @@ class ComprasService extends BaseService {
 
     // Validar archivos si existen
     if (archivos.length > 0) {
-      archivos.forEach(file => this.validateFile(file))
+      archivos.forEach((file) => this.validateFile(file))
     }
 
     console.log('compraData', compraData)
@@ -36,35 +36,44 @@ class ComprasService extends BaseService {
    */
   async getAll(params = {}) {
     const response = await super.getAll(params)
-    
+
     // Adaptar respuesta para mantener compatibilidad con el frontend existente
     return {
-      compras: response.data?.data || response.data?.compras || response.data || [],
-      pagination: response.data?.pagination || response.data?.meta || {
-        page: response.data?.page || 1,
-        pages: response.data?.pages || 1,
-        total: response.data?.total || 0,
-        limit: response.data?.limit || 10,
-      },
-      total: response.data?.total || response.data?.count || 
-             (response.data?.data ? response.data.data.length : 0),
+      compras:
+        response.data?.data || response.data?.compras || response.data || [],
+      pagination: response.data?.pagination ||
+        response.data?.meta || {
+          page: response.data?.page || 1,
+          pages: response.data?.pages || 1,
+          total: response.data?.total || 0,
+          limit: response.data?.limit || 10,
+        },
+      total:
+        response.data?.total ||
+        response.data?.count ||
+        (response.data?.data ? response.data.data.length : 0),
     }
   }
 
   /**
-   * Actualizar compra
+   * Actualizar compra completa con manejo de archivos
    * @param {string|number} id - ID de la compra
    * @param {Object} compraData - Datos actualizados
-   * @param {Array} archivos - Archivos adjuntos
+   * @param {Array} archivos - Nuevos archivos adjuntos
+   * @param {Array} archivosAEliminar - Array de nombres de archivos a eliminar
    * @returns {Promise<Object>} Compra actualizada
    */
-  async update(id, compraData, archivos = []) {
+  async update(id, compraData, archivos = [], archivosAEliminar = []) {
     // Validar archivos si existen
     if (archivos.length > 0) {
-      archivos.forEach(file => this.validateFile(file))
+      archivos.forEach((file) => this.validateFile(file))
     }
 
-    return await super.update(id, compraData, archivos)
+    // Usar el método mejorado del BaseService
+    return await super.update(id, compraData, archivos, {
+      filesToDelete: archivosAEliminar,
+      forceFormData: true, // Siempre usar FormData para compras (por compatibilidad con backend)
+    })
   }
 
   /**
@@ -125,7 +134,7 @@ class ComprasService extends BaseService {
   }
 
   /**
-   * Eliminar archivo específico de una compra
+   * Eliminar archivo específico de una compra (método mejorado)
    * @param {string|number} compraId - ID de la compra
    * @param {string} nombreArchivo - Nombre del archivo a eliminar
    * @returns {Promise<Object>} Compra actualizada
@@ -135,12 +144,8 @@ class ComprasService extends BaseService {
       throw new Error('ID de compra y nombre de archivo requeridos')
     }
 
-    // Para eliminar un archivo, actualizar la compra con el archivo en la lista de eliminación
-    const response = await this.client.put(`${this.baseUrl}/${compraId}`, {
-      archivos_a_eliminar: [nombreArchivo]
-    })
-
-    return this.formatResponse(response)
+    // Usar el método update mejorado para eliminar el archivo
+    return await this.update(compraId, {}, [], [nombreArchivo])
   }
 
   // ===== MÉTODOS ESPECÍFICOS DE FACTURAS =====
@@ -157,7 +162,7 @@ class ComprasService extends BaseService {
 
     // Validar archivos si existen
     if (archivos.length > 0) {
-      archivos.forEach(file => this.validateFile(file))
+      archivos.forEach((file) => this.validateFile(file))
     }
 
     // Crear FormData con los archivos
@@ -184,7 +189,9 @@ class ComprasService extends BaseService {
   async getFacturas(compraId) {
     if (!compraId) throw new Error('ID de compra requerido')
 
-    const response = await this.client.get(`${this.baseUrl}/${compraId}/facturas`)
+    const response = await this.client.get(
+      `${this.baseUrl}/${compraId}/facturas`
+    )
     return this.formatResponse(response)
   }
 
@@ -206,14 +213,21 @@ class ComprasService extends BaseService {
   }
 
   /**
-   * Actualizar factura
+   * Actualizar factura con manejo de archivos mejorado
    * @param {string|number} compraId - ID de la compra
    * @param {string|number} facturaId - ID de la factura
    * @param {Object} facturaData - Datos actualizados
    * @param {Array} archivos - Nuevos archivos (opcional)
+   * @param {Array} archivosAEliminar - Array de nombres de archivos a eliminar
    * @returns {Promise<Object>} Factura actualizada
    */
-  async updateFactura(compraId, facturaId, facturaData, archivos = []) {
+  async updateFactura(
+    compraId,
+    facturaId,
+    facturaData,
+    archivos = [],
+    archivosAEliminar = []
+  ) {
     if (!compraId || !facturaId) {
       throw new Error('ID de compra y factura requeridos')
     }
@@ -221,10 +235,22 @@ class ComprasService extends BaseService {
     let payload = facturaData
     let config = {}
 
-    // Si hay archivos nuevos, crear FormData
-    if (archivos.length > 0) {
-      archivos.forEach(file => this.validateFile(file))
-      payload = this.createFormData(facturaData, archivos)
+    // Usar FormData si hay archivos nuevos o archivos a eliminar
+    const shouldUseFormData =
+      archivos.length > 0 || archivosAEliminar.length > 0
+
+    if (shouldUseFormData) {
+      // Validar archivos nuevos
+      if (archivos.length > 0) {
+        archivos.forEach((file) => this.validateFile(file))
+      }
+
+      // Usar el método mejorado para crear FormData
+      payload = this.createFormDataWithDeletion(
+        facturaData,
+        archivos,
+        archivosAEliminar
+      )
       config.headers = { 'Content-Type': 'multipart/form-data' }
     }
 
@@ -334,10 +360,11 @@ class ComprasService extends BaseService {
    */
   async search(searchTerm, params = {}) {
     const response = await super.search(searchTerm, params)
-    
+
     // Adaptar estructura para compatibilidad
     return {
-      compras: response.data?.data || response.data?.compras || response.data || [],
+      compras:
+        response.data?.data || response.data?.compras || response.data || [],
       pagination: response.data?.pagination || response.data?.meta || null,
       total: response.data?.total || response.data?.count || 0,
     }
@@ -362,7 +389,9 @@ class ComprasService extends BaseService {
    */
   async getStats(filtros = {}) {
     const params = this.cleanParams(filtros)
-    const response = await this.client.get(`${this.baseUrl}/estadisticas`, { params })
+    const response = await this.client.get(`${this.baseUrl}/estadisticas`, {
+      params,
+    })
     return this.formatResponse(response)
   }
 
@@ -374,7 +403,7 @@ class ComprasService extends BaseService {
    */
   async export(filtros = {}, formato = 'excel') {
     const params = { ...this.cleanParams(filtros), formato }
-    
+
     // Generar nombre de archivo con fecha
     const fecha = new Date().toISOString().split('T')[0]
     const extension = formato === 'excel' ? 'xlsx' : 'pdf'
@@ -441,10 +470,13 @@ class ComprasService extends BaseService {
   async complete(id, completionData = {}) {
     if (!id) throw new Error('ID de compra requerido')
 
-    const response = await this.client.patch(`${this.baseUrl}/${id}/completar`, {
-      fecha_completion: new Date().toISOString(),
-      ...completionData
-    })
+    const response = await this.client.patch(
+      `${this.baseUrl}/${id}/completar`,
+      {
+        fecha_completion: new Date().toISOString(),
+        ...completionData,
+      }
+    )
 
     return this.formatResponse(response)
   }
@@ -525,7 +557,9 @@ class ComprasService extends BaseService {
    */
   async getProveedores(filtros = {}) {
     const params = this.cleanParams(filtros)
-    const response = await this.client.get(`${this.baseUrl}/proveedores`, { params })
+    const response = await this.client.get(`${this.baseUrl}/proveedores`, {
+      params,
+    })
     return this.formatResponse(response)
   }
 
@@ -542,10 +576,15 @@ class ComprasService extends BaseService {
     if (['admin_sistema', 'administrativo'].includes(usuario.rol)) return true
 
     // Aprobadores pueden editar compras no entregadas
-    if (usuario.rol === 'aprobador' && !['entregada'].includes(compra.estatus)) return true
+    if (usuario.rol === 'aprobador' && !['entregada'].includes(compra.estatus))
+      return true
 
     // El creador puede editar compras ordenadas únicamente
-    if (compra.creado_por === usuario.id_usuario && compra.estatus === 'ordenada') return true
+    if (
+      compra.creado_por === usuario.id_usuario &&
+      compra.estatus === 'ordenada'
+    )
+      return true
 
     return false
   }
@@ -561,13 +600,22 @@ class ComprasService extends BaseService {
     if (usuario.rol === 'admin_sistema') return true
 
     // Administrativo puede eliminar compras no entregadas
-    if (usuario.rol === 'administrativo' && !['entregada'].includes(compra.estatus)) return true
+    if (
+      usuario.rol === 'administrativo' &&
+      !['entregada'].includes(compra.estatus)
+    )
+      return true
 
     // Aprobador puede eliminar compras no entregadas
-    if (usuario.rol === 'aprobador' && !['entregada'].includes(compra.estatus)) return true
+    if (usuario.rol === 'aprobador' && !['entregada'].includes(compra.estatus))
+      return true
 
     // El creador puede eliminar compras ordenadas únicamente
-    if (compra.creado_por === usuario.id_usuario && compra.estatus === 'ordenada') return true
+    if (
+      compra.creado_por === usuario.id_usuario &&
+      compra.estatus === 'ordenada'
+    )
+      return true
 
     return false
   }

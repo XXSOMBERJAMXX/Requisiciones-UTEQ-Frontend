@@ -20,7 +20,7 @@ class SolicitudesService extends BaseService {
 
     // Validar archivos
     if (archivos.length > 0) {
-      archivos.forEach(file => this.validateFile(file))
+      archivos.forEach((file) => this.validateFile(file))
     }
 
     console.log('solicitudData', solicitudData)
@@ -36,17 +36,27 @@ class SolicitudesService extends BaseService {
    */
   async getAll(params = {}) {
     const response = await super.getAll(params)
-    
+
     // Adaptar respuesta para mantener compatibilidad con el frontend existente
     return {
-      solicitudes: response.data?.data || response.data?.solicitudes || response.data?.results || response.data || [],
-      pagination: response.data?.pagination || response.data?.meta || {
-        page: response.data?.page || 1,
-        pages: response.data?.pages || 1,
-        total: response.data?.total || 0,
-        limit: response.data?.limit || 10,
-      },
-      total: response.data?.total || response.data?.count || response.data?.totalItems || 0,
+      solicitudes:
+        response.data?.data ||
+        response.data?.solicitudes ||
+        response.data?.results ||
+        response.data ||
+        [],
+      pagination: response.data?.pagination ||
+        response.data?.meta || {
+          page: response.data?.page || 1,
+          pages: response.data?.pages || 1,
+          total: response.data?.total || 0,
+          limit: response.data?.limit || 10,
+        },
+      total:
+        response.data?.total ||
+        response.data?.count ||
+        response.data?.totalItems ||
+        0,
     }
   }
 
@@ -57,7 +67,7 @@ class SolicitudesService extends BaseService {
    */
   async getMySolicitudes(params = {}) {
     const cleanedParams = this.cleanParams(params)
-    
+
     const response = await this.client.get(`${this.baseUrl}/mis-solicitudes`, {
       params: cleanedParams,
     })
@@ -67,31 +77,38 @@ class SolicitudesService extends BaseService {
 
     // Adaptar estructura para compatibilidad
     return {
-      solicitudes: data?.data || data?.solicitudes || data?.results || data || [],
-      pagination: data?.pagination || data?.meta || {
-        page: data?.page || 1,
-        pages: data?.pages || 1,
-        total: data?.total || 0,
-        limit: data?.limit || 10,
-      },
+      solicitudes:
+        data?.data || data?.solicitudes || data?.results || data || [],
+      pagination: data?.pagination ||
+        data?.meta || {
+          page: data?.page || 1,
+          pages: data?.pages || 1,
+          total: data?.total || 0,
+          limit: data?.limit || 10,
+        },
       total: data?.total || data?.count || data?.totalItems || 0,
     }
   }
 
   /**
-   * Actualizar solicitud completa
+   * Actualizar solicitud completa con manejo de archivos
    * @param {string|number} id - ID de la solicitud
    * @param {Object} solicitudData - Datos actualizados
    * @param {Array} archivos - Nuevos archivos adjuntos
+   * @param {Array} archivosAEliminar - Array de nombres de archivos a eliminar
    * @returns {Promise<Object>} Solicitud actualizada
    */
-  async update(id, solicitudData, archivos = []) {
+  async update(id, solicitudData, archivos = [], archivosAEliminar = []) {
     // Validar archivos si existen
     if (archivos.length > 0) {
-      archivos.forEach(file => this.validateFile(file))
+      archivos.forEach((file) => this.validateFile(file))
     }
 
-    return await super.update(id, solicitudData, archivos)
+    // Usar el método mejorado del BaseService
+    return await super.update(id, solicitudData, archivos, {
+      filesToDelete: archivosAEliminar,
+      forceFormData: true, // Siempre usar FormData para solicitudes (por compatibilidad con backend)
+    })
   }
 
   // ===== MÉTODOS DE WORKFLOW =====
@@ -144,7 +161,9 @@ class SolicitudesService extends BaseService {
       throw new Error('ID y estatus son requeridos')
     }
 
-    console.warn('updateStatus está deprecated. Usar métodos específicos como approve() o cancel()')
+    console.warn(
+      'updateStatus está deprecated. Usar métodos específicos como approve() o cancel()'
+    )
 
     // Redirigir a métodos específicos
     if (estatus === 'aprobada') {
@@ -191,7 +210,9 @@ class SolicitudesService extends BaseService {
    */
   async getStats(filtros = {}) {
     const params = this.cleanParams(filtros)
-    const response = await this.client.get(`${this.baseUrl}/estadisticas`, { params })
+    const response = await this.client.get(`${this.baseUrl}/estadisticas`, {
+      params,
+    })
     return this.formatResponse(response)
   }
 
@@ -227,7 +248,7 @@ class SolicitudesService extends BaseService {
    */
   async export(filtros = {}, formato = 'excel') {
     const params = { ...this.cleanParams(filtros), formato }
-    
+
     // Generar nombre de archivo con fecha
     const fecha = new Date().toISOString().split('T')[0]
     const extension = formato === 'excel' ? 'xlsx' : 'pdf'
@@ -424,10 +445,14 @@ class SolicitudesService extends BaseService {
    */
   async search(searchTerm, params = {}) {
     const response = await super.search(searchTerm, params)
-    
+
     // Adaptar estructura para compatibilidad
     return {
-      solicitudes: response.data?.data || response.data?.solicitudes || response.data || [],
+      solicitudes:
+        response.data?.data ||
+        response.data?.solicitudes ||
+        response.data ||
+        [],
       pagination: response.data?.pagination || response.data?.meta || null,
       total: response.data?.total || response.data?.count || 0,
     }

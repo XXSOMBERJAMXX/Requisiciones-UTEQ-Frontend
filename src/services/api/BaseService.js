@@ -17,7 +17,9 @@ class BaseService {
    */
   async getAll(params = {}) {
     const cleanParams = this.cleanParams(params)
-    const response = await this.client.get(this.baseUrl, { params: cleanParams })
+    const response = await this.client.get(this.baseUrl, {
+      params: cleanParams,
+    })
     return this.formatResponse(response)
   }
 
@@ -28,7 +30,7 @@ class BaseService {
    */
   async getById(id) {
     if (!id) throw new Error('ID es requerido')
-    
+
     const response = await this.client.get(`${this.baseUrl}/${id}`)
     return this.formatResponse(response)
   }
@@ -48,7 +50,7 @@ class BaseService {
     // Si hay archivos, crear FormData
     if (files && files.length > 0) {
       const formData = new FormData()
-      
+
       // Agregar datos del formulario
       Object.entries(data).forEach(([key, value]) => {
         if (value !== null && value !== undefined) {
@@ -61,12 +63,12 @@ class BaseService {
           }
         }
       })
-      
+
       // Agregar archivos con el nombre correcto que espera el backend
       files.forEach((file) => {
         formData.append('files', file) // Cambio: usar 'files' en lugar de 'archivos'
       })
-      
+
       payload = formData
       config.headers = { 'Content-Type': 'multipart/form-data' }
     }
@@ -82,24 +84,77 @@ class BaseService {
    * Actualizar un registro
    * @param {string|number} id - ID del registro
    * @param {Object} data - Datos a actualizar
-   * @param {Array} files - Archivos opcionales
+   * @param {Array} files - Archivos opcionales (nuevos archivos)
+   * @param {Object} options - Opciones adicionales
+   * @param {Array} options.filesToDelete - Array de nombres de archivos a eliminar
+   * @param {boolean} options.forceFormData - Forzar uso de FormData aunque no haya archivos
    * @returns {Promise<Object>} Registro actualizado
    */
-  async update(id, data, files = []) {
+  async update(id, data, files = [], options = {}) {
     if (!id) throw new Error('ID es requerido')
     if (!data) throw new Error('Datos son requeridos')
+
+    const { filesToDelete = [], forceFormData = false } = options
 
     let payload = data
     let config = {}
 
-    // Si hay archivos, crear FormData
-    if (files && files.length > 0) {
-      payload = this.createFormData(data, files)
+    // Usar FormData si:
+    // - Hay archivos nuevos
+    // - Hay archivos a eliminar
+    // - Se fuerza el uso de FormData
+    const shouldUseFormData =
+      files.length > 0 || filesToDelete.length > 0 || forceFormData
+
+    if (shouldUseFormData) {
+      payload = this.createFormDataWithDeletion(data, files, filesToDelete)
       config.headers = { 'Content-Type': 'multipart/form-data' }
     }
 
-    const response = await this.client.put(`${this.baseUrl}/${id}`, payload, config)
+    const response = await this.client.put(
+      `${this.baseUrl}/${id}`,
+      payload,
+      config
+    )
     return this.formatResponse(response)
+  }
+
+  /**
+   * Crear FormData para archivos con soporte para eliminación - VERSIÓN MEJORADA
+   * @param {Object} data - Datos del formulario
+   * @param {Array} files - Archivos nuevos
+   * @param {Array} filesToDelete - Array de nombres de archivos a eliminar
+   * @returns {FormData} FormData listo
+   */
+  createFormDataWithDeletion(data, files = [], filesToDelete = []) {
+    const formData = new FormData()
+
+    // Agregar datos del formulario
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        if (typeof value === 'object' && !Array.isArray(value)) {
+          formData.append(key, JSON.stringify(value))
+        } else if (Array.isArray(value)) {
+          formData.append(key, JSON.stringify(value))
+        } else {
+          formData.append(key, value)
+        }
+      }
+    })
+
+    // Agregar archivos a eliminar
+    if (filesToDelete.length > 0) {
+      formData.append('archivos_a_eliminar', JSON.stringify(filesToDelete))
+    }
+
+    // Agregar archivos nuevos
+    files.forEach((file) => {
+      if (file) {
+        formData.append('archivos', file) // Usar 'archivos' como espera el backend
+      }
+    })
+
+    return formData
   }
 
   /**
@@ -109,7 +164,7 @@ class BaseService {
    */
   async delete(id) {
     if (!id) throw new Error('ID es requerido')
-    
+
     const response = await this.client.delete(`${this.baseUrl}/${id}`)
     return this.formatResponse(response)
   }
@@ -127,11 +182,11 @@ class BaseService {
 
     const searchParams = {
       search: searchTerm,
-      ...this.cleanParams(params)
+      ...this.cleanParams(params),
     }
 
-    const response = await this.client.get(`${this.baseUrl}/search`, { 
-      params: searchParams 
+    const response = await this.client.get(`${this.baseUrl}/search`, {
+      params: searchParams,
     })
     return this.formatResponse(response)
   }
@@ -145,7 +200,7 @@ class BaseService {
    */
   cleanParams(params) {
     if (!params) return {}
-    
+
     return Object.fromEntries(
       Object.entries(params).filter(
         ([_, value]) => value !== '' && value !== null && value !== undefined
@@ -164,47 +219,15 @@ class BaseService {
       return {
         data: response.data.data,
         message: response.data.message,
-        meta: response.data.meta || {}
+        meta: response.data.meta || {},
       }
     }
 
     // Respuesta directa
     return {
       data: response.data,
-      message: response.data?.message || 'Operación exitosa'
+      message: response.data?.message || 'Operación exitosa',
     }
-  }
-
-  /**
-   * Crear FormData para archivos - VERSIÓN CORREGIDA
-   * @param {Object} data - Datos del formulario
-   * @param {Array} files - Archivos
-   * @returns {FormData} FormData listo
-   */
-  createFormData(data, files = []) {
-    const formData = new FormData()
-
-    // Agregar datos
-    Object.entries(data).forEach(([key, value]) => {
-      if (value !== null && value !== undefined) {
-        if (typeof value === 'object' && !Array.isArray(value)) {
-          formData.append(key, JSON.stringify(value))
-        } else if (Array.isArray(value)) {
-          formData.append(key, JSON.stringify(value))
-        } else {
-          formData.append(key, value)
-        }
-      }
-    })
-
-    // Agregar archivos con el nombre correcto
-    files.forEach((file) => {
-      if (file) {
-        formData.append('files', file) // Cambio: usar 'files' consistentemente
-      }
-    })
-
-    return formData
   }
 
   /**
@@ -233,7 +256,7 @@ class BaseService {
    */
   async downloadFile(url, filename) {
     const response = await this.client.get(url, { responseType: 'blob' })
-    
+
     const blob = new Blob([response.data])
     const downloadUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
