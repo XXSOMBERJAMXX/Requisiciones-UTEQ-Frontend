@@ -284,17 +284,7 @@ const Compras = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
-                        <Button
-                          variant="secondary"
-                          className="p-2 rounded-full"
-                          title="Ver Facturas"
-                          onClick={() =>
-                            navigate(`/compras/${compra.id_compra}/facturas`)
-                          }
-                          disabled={deleting === compra.id_compra}
-                        >
-                          <FaFileInvoice className="w-5 h-5 text-slate-200" />
-                        </Button>
+                       
                         <Button
                           variant="outline"
                           onClick={() =>
